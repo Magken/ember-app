@@ -1,0 +1,254 @@
+@import './styles/tokens.css';
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Hide scrollbars for webkit browsers */
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+/* Hide scrollbars for Firefox */
+.scrollbar-hide {
+  scrollbar-width: none;
+}
+
+/* Hide scrollbars for IE/Edge */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+}
+
+@keyframes emberFromEdge {
+  0% {
+    opacity: 1;
+    transform: translate(0, 0) scale(1);
+    filter: brightness(2.5) drop-shadow(0 0 4px white);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(var(--tx), var(--ty)) scale(1.5);
+    filter: brightness(1) drop-shadow(0 0 1px #555);
+  }
+}
+
+@keyframes glowBurst {
+  0% {
+    opacity: 0.8;
+    transform: scale(1);
+    filter: blur(0.5rem);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.4);
+    filter: blur(1.2rem);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.8);
+    filter: blur(2rem);
+  }
+}
+
+@keyframes burnProgress {
+  0% {
+    background-position: 0% 0%, 0% 0%, 0% 0%, 0% 0%;
+    filter: brightness(1) contrast(1);
+  }
+  25% {
+    background-position: 25% 25%, 50% 25%, 75% 50%, 25% 75%;
+    filter: brightness(1.1) contrast(1.1);
+  }
+  50% {
+    background-position: 50% 50%, 100% 50%, 50% 100%, 50% 50%;
+    filter: brightness(0.9) contrast(1.2);
+  }
+  75% {
+    background-position: 75% 75%, 50% 75%, 25% 50%, 75% 25%;
+    filter: brightness(1.05) contrast(1.05);
+  }
+  100% {
+    background-position: 100% 100%, 0% 100%, 100% 0%, 100% 100%;
+    filter: brightness(1) contrast(1);
+  }
+}
+
+@keyframes edgeGlowMix {
+  0%, 100% {
+    filter:
+      drop-shadow(0 0 2px rgba(255,191,0,0.8))
+      drop-shadow(0 0 4px rgba(255,140,0,0.6))
+      drop-shadow(0 0 1px rgba(255,69,0,0.4));
+  }
+  33% {
+    filter:
+      drop-shadow(0 0 3px rgba(255,140,0,0.9))
+      drop-shadow(0 0 5px rgba(255,191,0,0.7))
+      drop-shadow(0 0 2px rgba(255,69,0,0.5));
+  }
+  66% {
+    filter:
+      drop-shadow(0 0 2px rgba(255,69,0,0.8))
+      drop-shadow(0 0 4px rgba(255,140,0,0.6))
+      drop-shadow(0 0 1px rgba(255,191,0,0.4));
+  }
+}
+
+@keyframes charredEdge {
+  0%, 100% {
+    box-shadow: 
+      inset 0 0 20px rgba(139, 69, 19, 0.8),
+      inset 0 0 40px rgba(101, 67, 33, 0.6),
+      0 0 15px rgba(255, 140, 0, 0.4);
+  }
+  50% {
+    box-shadow: 
+      inset 0 0 25px rgba(139, 69, 19, 0.9),
+      inset 0 0 50px rgba(101, 67, 33, 0.8),
+      0 0 20px rgba(255, 140, 0, 0.6);
+  }
+}
+
+@keyframes ashFloat {
+  0% {
+    opacity: 0;
+    transform: translateY(0) translateX(0) rotate(0deg) scale(0.5);
+  }
+  10% {
+    opacity: 0.8;
+  }
+  90% {
+    opacity: 0.3;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-60px) translateX(var(--drift-x)) rotate(360deg) scale(0.2);
+  }
+}
+
+@keyframes flameFlicker {
+  0%, 100% {
+    transform: translateY(0) scaleY(1) scaleX(1);
+    opacity: 0.8;
+    filter: hue-rotate(0deg) brightness(1.2);
+  }
+  25% {
+    transform: translateY(-2px) scaleY(1.1) scaleX(0.9);
+    opacity: 1;
+    filter: hue-rotate(10deg) brightness(1.4);
+  }
+  50% {
+    transform: translateY(-1px) scaleY(0.9) scaleX(1.1);
+    opacity: 0.9;
+    filter: hue-rotate(-5deg) brightness(1.1);
+  }
+  75% {
+    transform: translateY(-3px) scaleY(1.2) scaleX(0.8);
+    opacity: 1;
+    filter: hue-rotate(15deg) brightness(1.3);
+  }
+}
+
+@keyframes smokeRise {
+  0% {
+    opacity: 0.6;
+    transform: translateY(0) translateX(0) scale(0.5);
+    filter: blur(1px);
+  }
+  50% {
+    opacity: 0.4;
+    transform: translateY(-30px) translateX(var(--smoke-drift)) scale(1);
+    filter: blur(2px);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-80px) translateX(calc(var(--smoke-drift) * 2)) scale(1.5);
+    filter: blur(4px);
+  }
+}
+
+@keyframes paperCurl {
+  0% {
+    transform: perspective(1000px) rotateX(0deg) rotateY(0deg);
+  }
+  25% {
+    transform: perspective(1000px) rotateX(2deg) rotateY(-1deg);
+  }
+  50% {
+    transform: perspective(1000px) rotateX(-1deg) rotateY(2deg);
+  }
+  75% {
+    transform: perspective(1000px) rotateX(1deg) rotateY(-2deg);
+  }
+  100% {
+    transform: perspective(1000px) rotateX(0deg) rotateY(0deg);
+  }
+}
+
+@keyframes flameLick {
+  0%, 100% {
+    transform: translateY(0) scaleY(1) scaleX(1) rotate(0deg);
+    opacity: 0.7;
+  }
+  25% {
+    transform: translateY(-1px) scaleY(1.2) scaleX(0.8) rotate(2deg);
+    opacity: 1;
+  }
+  50% {
+    transform: translateY(-2px) scaleY(0.9) scaleX(1.1) rotate(-1deg);
+    opacity: 0.8;
+  }
+  75% {
+    transform: translateY(-1px) scaleY(1.1) scaleX(0.9) rotate(1deg);
+    opacity: 0.9;
+  }
+}
+
+.glow-burst {
+  animation: glowBurst 0.6s ease-out;
+}
+
+@keyframes ember {
+  0% {
+    opacity: 0;
+    transform: translateY(0) scale(0.6);
+  }
+  20% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-20px) scale(1.2);
+  }
+}
+
+.animate-ember {
+  animation-name: ember;
+  animation-timing-function: ease-out;
+  animation-iteration-count: infinite;
+}
+
+.burning-paper {
+  animation: 
+    burnProgress 8s ease-in-out infinite,
+    charredEdge 3s ease-in-out infinite,
+    paperCurl 6s ease-in-out infinite;
+}
+
+.flame-flicker {
+  animation: flameFlicker 0.8s ease-in-out infinite;
+}
+
+.flame-lick {
+  animation: flameLick 0.8s ease-in-out infinite;
+}
+
+.ash-particle {
+  animation: ashFloat 4s ease-out infinite;
+}
+
+.smoke-wisp {
+  animation: smokeRise 6s ease-out infinite;
+}

@@ -1,0 +1,54 @@
+/* Embr Design System Tokens */
+:root {
+  /* Colors */
+  --color-ember: #FFBF00;
+  --color-carmine: #960018;
+  --color-brown: #996515;
+  --color-navy: #0B1D3A;
+  --color-deep-blue: #1F3B73;
+  --color-dark: #0A0A0A;
+  --color-white: #F3F3F3;
+  --color-gray: #999999;
+
+  /* Typography */
+  --font-display: 'Syne', system-ui, sans-serif;
+  --font-body: 'Inter', system-ui, sans-serif;
+  --font-base-size: 16px;
+  --font-scale: 1.25;
+
+  /* Text Sizes */
+  --text-h1: 48px;
+  --text-h2: 38px;
+  --text-h3: 31px;
+  --text-body: 16px;
+  --text-small: 14px;
+  --text-tiny: 12px;
+
+  /* Spacing */
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 16px;
+  --spacing-lg: 24px;
+
+  /* Radius */
+  --radius-soft: 12px;
+  --radius-round: 9999px;
+
+  /* Effects */
+  --effect-hover-glow: 0 0 12px rgba(255, 191, 0, 0.4);
+  --effect-ember-glow: 0 0 20px rgba(255, 191, 0, 0.3);
+}
+
+/* Animations */
+@keyframes emberPulse {
+  0%, 100% {
+    box-shadow: 0 0 8px rgba(255, 191, 0, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 20px rgba(255, 191, 0, 0.6);
+  }
+}
+
+/* Font imports */
+@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');

@@ -1,0 +1,320 @@
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { Plus, Minus, Maximize2 } from 'lucide-react';
+import { IconedButton } from './IconedButton';
+import { Flame } from './Flame';
+
+interface FlameData {
+  id: string;
+  x: number; // Position as percentage (0-100)
+  y: number; // Position as percentage (0-100)
+  strength: number; // 0-1
+  size?: number;
+  name?: string; // Added name property
+}
+
+interface HearthProps {
+  flames: FlameData[];
+  className?: string;
+  width?: number;
+  height?: number;
+  onFlameClick?: (flameId: string) => void;
+}
+
+export const Hearth: React.FC<HearthProps> = ({
+  flames,
+  className = '',
+  width = 800,
+  height = 600,
+  onFlameClick
+}) => {
+  const [zoom, setZoom] = useState(0.7); // Set initial zoom to 70%
+  const [panX, setPanX] = useState(0);
+  const [panY, setPanY] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  const [panStart, setPanStart] = useState({ x: 0, y: 0 });
+  const hearthRef = useRef<HTMLDivElement>(null);
+  const [autoZoomed, setAutoZoomed] = useState(false);
+
+  // Auto-zoom to fit all flames on initialization
+  useEffect(() => {
+    if (flames.length > 0 && !autoZoomed) {
+      autoFitFlames();
+      setAutoZoomed(true);
+    }
+  }, [flames, autoZoomed]);
+
+  const autoFitFlames = () => {
+    if (flames.length === 0) return;
+
+    // Find bounds of all flames
+    const padding = 10; // Percentage padding
+    const minX = Math.min(...flames.map(f => f.x)) - padding;
+    const maxX = Math.max(...flames.map(f => f.x)) + padding;
+    const minY = Math.min(...flames.map(f => f.y)) - padding;
+    const maxY = Math.max(...flames.map(f => f.y)) + padding;
+
+    // Calculate required zoom to fit all flames
+    const contentWidth = maxX - minX;
+    const contentHeight = maxY - minY;
+    
+    const zoomX = 100 / contentWidth;
+    const zoomY = 100 / contentHeight;
+    const optimalZoom = Math.min(zoomX, zoomY, 2) * 0.7; // Cap at 2x zoom and apply 70% initial zoom
+
+    // Calculate pan to center the content
+    const centerX = (minX + maxX) / 2;
+    const centerY = (minY + maxY) / 2;
+    const panOffsetX = (50 - centerX) * optimalZoom;
+    const panOffsetY = (50 - centerY) * optimalZoom;
+
+    setZoom(optimalZoom);
+    setPanX(panOffsetX);
+    setPanY(panOffsetY);
+  };
+
+  const handleZoomIn = () => {
+    setZoom(prev => Math.min(prev * 1.2, 5));
+  };
+
+  const handleZoomOut = () => {
+    setZoom(prev => Math.max(prev / 1.2, 0.1));
+  };
+
+  const resetView = () => {
+    autoFitFlames();
+  };
+
+  // Mouse drag handlers for panning
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    // Don't start dragging if clicking on a flame or control button
+    const target = e.target as HTMLElement;
+    if (target.closest('.flame-container') || target.closest('button')) {
+      return;
+    }
+
+    setIsDragging(true);
+    setDragStart({ x: e.clientX, y: e.clientY });
+    setPanStart({ x: panX, y: panY });
+    e.preventDefault();
+  }, [panX, panY]);
+
+  const handleMouseMove = useCallback((e: MouseEvent) => {
+    if (!isDragging) return;
+
+    const deltaX = e.clientX - dragStart.x;
+    const deltaY = e.clientY - dragStart.y;
+
+    // Apply pan with zoom compensation
+    setPanX(panStart.x + deltaX / zoom);
+    setPanY(panStart.y + deltaY / zoom);
+  }, [isDragging, dragStart, panStart, zoom]);
+
+  const handleMouseUp = useCallback(() => {
+    setIsDragging(false);
+  }, []);
+
+  // Touch handlers for mobile panning
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    if (e.touches.length === 1) {
+      const touch = e.touches[0];
+      setIsDragging(true);
+      setDragStart({ x: touch.clientX, y: touch.clientY });
+      setPanStart({ x: panX, y: panY });
+      e.preventDefault();
+    }
+  }, [panX, panY]);
+
+  const handleTouchMove = useCallback((e: TouchEvent) => {
+    if (!isDragging || e.touches.length !== 1) return;
+
+    const touch = e.touches[0];
+    const deltaX = touch.clientX - dragStart.x;
+    const deltaY = touch.clientY - dragStart.y;
+
+    setPanX(panStart.x + deltaX / zoom);
+    setPanY(panStart.y + deltaY / zoom);
+    e.preventDefault();
+  }, [isDragging, dragStart, panStart, zoom]);
+
+  const handleTouchEnd = useCallback(() => {
+    setIsDragging(false);
+  }, []);
+
+  // Add global mouse/touch event listeners
+  useEffect(() => {
+    if (isDragging) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+      document.addEventListener('touchmove', handleTouchMove, { passive: false });
+      document.addEventListener('touchend', handleTouchEnd);
+
+      return () => {
+        document.removeEventListener('mousemove', handleMouseMove);
+        document.removeEventListener('mouseup', handleMouseUp);
+        document.removeEventListener('touchmove', handleTouchMove);
+        document.removeEventListener('touchend', handleTouchEnd);
+      };
+    }
+  }, [isDragging, handleMouseMove, handleMouseUp, handleTouchMove, handleTouchEnd]);
+
+  // Sort flames by strength so dying flames are more visible (rendered on top)
+  const sortedFlames = useMemo(() => {
+    return [...flames].sort((a, b) => a.strength - b.strength);
+  }, [flames]);
+
+  // Function to get flame color based on strength
+  const getFlameColor = (strength: number) => {
+    if (strength < 0.3) return 'text-carmine'; // Dying flames
+    if (strength < 0.7) return 'text-ember'; // Medium flames
+    return 'text-softwhite'; // Strong flames
+  };
+
+  return (
+    <div 
+      className={`relative bg-transparent overflow-hidden select-none ${className}`}
+      style={{ 
+        width, 
+        height,
+        cursor: isDragging ? 'grabbing' : 'grab'
+      }}
+      onMouseDown={handleMouseDown}
+      onTouchStart={handleTouchStart}
+    >
+      {/* Control Buttons */}
+      <div className="absolute top-4 right-4 z-20 flex gap-2">
+        <IconedButton
+          icon={<Plus className="w-4 h-4" />}
+          label="Zoom In"
+          size="sm"
+          onClick={handleZoomIn}
+        />
+        <IconedButton
+          icon={<Minus className="w-4 h-4" />}
+          label="Zoom Out"
+          size="sm"
+          onClick={handleZoomOut}
+        />
+      </div>
+
+      {/* Fit All Button */}
+      <div className="absolute top-4 left-4 z-20">
+        <IconedButton
+          icon={<Maximize2 className="w-4 h-4" />}
+          label="Fit All"
+          size="sm"
+          onClick={resetView}
+        />
+      </div>
+
+      {/* Zoom Level Indicator */}
+      <div className="absolute bottom-4 right-4 z-20 px-2 py-1 bg-navy/80 text-softwhite text-xs rounded border border-ember/30">
+        {Math.round(zoom * 100)}%
+      </div>
+
+      {/* Pan Instructions */}
+      <div className="absolute bottom-4 left-4 z-20 px-2 py-1 bg-navy/80 text-ash text-xs rounded border border-ember/30">
+        Drag to pan
+      </div>
+
+      {/* Hearth Canvas */}
+      <div
+        ref={hearthRef}
+        className="absolute inset-0 transition-transform duration-200 ease-out"
+        style={{
+          transform: `scale(${zoom}) translate(${panX}px, ${panY}px)`,
+          transformOrigin: 'center center',
+          transitionProperty: isDragging ? 'none' : 'transform'
+        }}
+      >
+        {/* Background texture/pattern for the hearth */}
+        <div className="absolute inset-0 opacity-10">
+          <div 
+            className="w-full h-full"
+            style={{
+              backgroundImage: `
+                radial-gradient(circle at 25% 25%, rgba(139,69,19,0.3) 0%, transparent 50%),
+                radial-gradient(circle at 75% 75%, rgba(101,67,33,0.2) 0%, transparent 50%),
+                radial-gradient(circle at 50% 50%, rgba(44,24,16,0.1) 0%, transparent 70%)
+              `,
+              backgroundSize: '200px 200px, 300px 300px, 400px 400px'
+            }}
+          />
+        </div>
+
+        {/* Flames positioned on the hearth with increased spacing */}
+        {sortedFlames.map((flame) => {
+          const flameSize = flame.size || 60;
+          
+          return (
+            <div
+              key={flame.id}
+              className="absolute transition-all duration-500 flame-container"
+              style={{
+                left: `${flame.x}%`,
+                top: `${flame.y}%`,
+                transform: 'translate(-50%, -50%)',
+                // Dying flames get a subtle highlight to make them more noticeable
+                filter: flame.strength < 0.3 
+                  ? 'drop-shadow(0 0 8px rgba(150,0,24,0.8))' 
+                  : 'none',
+                zIndex: flame.strength < 0.3 ? 10 : 5, // Dying flames on top
+                cursor: 'pointer'
+              }}
+            >
+              <Flame
+                strength={flame.strength}
+                size={flameSize}
+                onClick={() => onFlameClick?.(flame.id)}
+                interactive={true}
+                animated={true}
+              />
+              
+              {/* Flame name positioned outside the flame's brightest regions with increased distance */}
+              {flame.name && (
+                <div 
+                  className={`absolute left-1/2 transform -translate-x-1/2 text-xs font-medium text-center whitespace-nowrap ${getFlameColor(flame.strength)}`}
+                  style={{
+                    top: `${flameSize * 1.6}px`, // Increased distance from flame
+                    textShadow: flame.strength < 0.3 
+                      ? '0 0 4px rgba(150,0,24,0.8)' 
+                      : flame.strength < 0.7 
+                        ? '0 0 4px rgba(255,191,0,0.6)' 
+                        : '0 0 4px rgba(243,243,243,0.6)',
+                    pointerEvents: 'none' // Prevent interference with flame clicks
+                  }}
+                >
+                  {flame.name}
+                </div>
+              )}
+              
+              {/* Dying flame indicator - positioned below name with increased distance */}
+              {flame.strength < 0.3 && (
+                <div 
+                  className="absolute left-1/2 transform -translate-x-1/2 text-xs text-carmine font-medium animate-pulse"
+                  style={{
+                    top: `${flameSize * 1.6 + 24}px`, // Below the name with more space
+                    pointerEvents: 'none'
+                  }}
+                >
+                  Dying
+                </div>
+              )}
+            </div>
+          );
+        })}
+
+        {/* Empty hearth message */}
+        {flames.length === 0 && (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="text-center text-ash">
+              <div className="text-2xl mb-2">🔥</div>
+              <div className="text-sm">Empty Hearth</div>
+              <div className="text-xs opacity-60">Add flames to bring it to life</div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
