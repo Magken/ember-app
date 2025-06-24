@@ -88,7 +88,7 @@ export const logAuthAttempt = async (
       email_input: email,
       attempt_type_input: attemptType,
       success_input: success,
-      ip_address_input: ipAddress,
+      ip_input: ipAddress,
       user_agent_input: userAgent,
       error_message_input: errorMessage
     });
