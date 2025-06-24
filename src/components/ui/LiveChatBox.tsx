@@ -56,7 +56,6 @@ export const LiveChatBox: React.FC<LiveChatBoxProps> = ({
   const audioElementsRef = useRef<{ [key: string]: HTMLAudioElement }>({});
   const videoElementsRef = useRef<{ [key: string]: HTMLVideoElement }>({});
   const unsubscribeRef = useRef<(() => void) | null>(null);
-  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Cleanup audio and video elements on unmount
   useEffect(() => {
@@ -75,53 +74,8 @@ export const LiveChatBox: React.FC<LiveChatBoxProps> = ({
       if (unsubscribeRef.current) {
         unsubscribeRef.current();
       }
-      
-      // Cleanup polling
-      if (pollingIntervalRef.current) {
-        clearInterval(pollingIntervalRef.current);
-      }
     };
   }, []);
-
-  // Live polling for new messages (1 second interval)
-  const startPolling = useCallback(() => {
-    if (pollingIntervalRef.current) {
-      clearInterval(pollingIntervalRef.current);
-    }
-
-    pollingIntervalRef.current = setInterval(async () => {
-      if (conversationId) {
-        try {
-          const { data: latestMessages } = await getConversationMessages(conversationId, 10, 0);
-          
-          if (latestMessages && latestMessages.length > 0) {
-            setMessages(prev => {
-              // Check if we have new messages
-              const latestMessageId = latestMessages[0].message_id;
-              const currentLatestId = prev.length > 0 ? prev[0].message_id : null;
-              
-              if (latestMessageId !== currentLatestId) {
-                // We have new messages, merge them
-                const newMessages = latestMessages.filter(msg => 
-                  !prev.some(existingMsg => existingMsg.message_id === msg.message_id)
-                );
-                
-                if (newMessages.length > 0) {
-                  // Mark new messages as seen if they're not from the current user
-                  markMessagesAsSeen(conversationId);
-                  return [...newMessages, ...prev];
-                }
-              }
-              
-              return prev;
-            });
-          }
-        } catch (error) {
-          console.error('Polling error:', error);
-        }
-      }
-    }, 1000); // Poll every second
-  }, [conversationId]);
 
   // Initialize conversation and load messages
   useEffect(() => {
@@ -169,9 +123,6 @@ export const LiveChatBox: React.FC<LiveChatBoxProps> = ({
         
         unsubscribeRef.current = unsubscribe;
 
-        // Start live polling
-        startPolling();
-
       } catch (err: any) {
         console.error('Error initializing chat:', err);
         setError(err.message || 'Failed to initialize chat');
@@ -181,7 +132,7 @@ export const LiveChatBox: React.FC<LiveChatBoxProps> = ({
     };
 
     initializeChat();
-  }, [contactUserId, startPolling]);
+  }, [contactUserId]);
 
   // Scroll to bottom when new messages are added
   const scrollToBottom = useCallback(() => {
@@ -288,8 +239,14 @@ export const LiveChatBox: React.FC<LiveChatBoxProps> = ({
       console.log('Message sent successfully:', data);
       setMessage('');
       
-      // Trigger flame strength update event
-      window.dispatchEvent(new CustomEvent('messageSent'));
+      // 🔥 TRIGGER HEARTH UPDATE IMMEDIATELY
+      console.log('🔥 Message sent - triggering hearth update');
+      window.dispatchEvent(new CustomEvent('messageWasSent', { 
+        detail: { 
+          recipientId: contactUserId,
+          senderId: data?.sender_id 
+        } 
+      }));
       
       // Refresh chat after sending to see the sent message
       setTimeout(async () => {

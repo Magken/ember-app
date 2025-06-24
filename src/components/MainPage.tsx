@@ -114,6 +114,28 @@ export const MainPage: React.FC = () => {
     return () => window.removeEventListener('resize', updateDimensions);
   }, []);
 
+  // Load unread message counts for friends
+  const loadUnreadCounts = async (friendsList: Friend[]) => {
+    try {
+      const counts: { [userId: string]: number } = {};
+      
+      // Get unread count for each friend
+      await Promise.all(
+        friendsList.map(async (friend) => {
+          const count = await getUnreadCountForUser(friend.friend_id);
+          if (count > 0) {
+            counts[friend.friend_id] = count;
+          }
+        })
+      );
+      
+      setUnreadCounts(counts);
+      console.log('📬 Unread counts updated:', counts);
+    } catch (error) {
+      console.error('Error loading unread counts:', error);
+    }
+  };
+
   // THE MAIN REFRESH FUNCTION - This is what the refresh button calls
   const handleRefresh = useCallback(async () => {
     console.log('🔄 REFRESH TRIGGERED - Loading all data with flame strength calculation');
@@ -177,28 +199,6 @@ export const MainPage: React.FC = () => {
     }
   }, []);
 
-  // Load unread message counts for friends
-  const loadUnreadCounts = async (friendsList: Friend[]) => {
-    try {
-      const counts: { [userId: string]: number } = {};
-      
-      // Get unread count for each friend
-      await Promise.all(
-        friendsList.map(async (friend) => {
-          const count = await getUnreadCountForUser(friend.friend_id);
-          if (count > 0) {
-            counts[friend.friend_id] = count;
-          }
-        })
-      );
-      
-      setUnreadCounts(counts);
-      console.log('📬 Unread counts updated:', counts);
-    } catch (error) {
-      console.error('Error loading unread counts:', error);
-    }
-  };
-
   // Load data on component mount
   useEffect(() => {
     console.log('🚀 Component mounted - loading initial data');
@@ -236,7 +236,7 @@ export const MainPage: React.FC = () => {
     };
   }, [handleRefresh]);
 
-  // Listen for custom refresh events
+  // Listen for custom refresh events - INCLUDING THE NEW MESSAGE EVENT
   useEffect(() => {
     const handleFriendRequestSent = () => {
       console.log('📤 Friend request sent event - calling handleRefresh()');
@@ -248,20 +248,21 @@ export const MainPage: React.FC = () => {
       handleRefresh();
     };
 
-    const handleMessageSent = () => {
-      console.log('💌 Message sent event - calling handleRefresh()');
+    const handleMessageWasSent = (event: any) => {
+      console.log('💌 Message was sent event - calling handleRefresh()');
+      console.log('Message details:', event.detail);
       // Small delay to allow message to be processed
-      setTimeout(handleRefresh, 1000);
+      setTimeout(handleRefresh, 500);
     };
 
     window.addEventListener('friendRequestSent', handleFriendRequestSent);
     window.addEventListener('friendRequestResponded', handleFriendRequestResponded);
-    window.addEventListener('messageSent', handleMessageSent);
+    window.addEventListener('messageWasSent', handleMessageWasSent);
 
     return () => {
       window.removeEventListener('friendRequestSent', handleFriendRequestSent);
       window.removeEventListener('friendRequestResponded', handleFriendRequestResponded);
-      window.removeEventListener('messageSent', handleMessageSent);
+      window.removeEventListener('messageWasSent', handleMessageWasSent);
     };
   }, [handleRefresh]);
 
