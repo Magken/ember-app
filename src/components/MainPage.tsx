@@ -61,9 +61,7 @@ export const MainPage: React.FC = () => {
   const [unreadCounts, setUnreadCounts] = useState<{ [userId: string]: number }>({});
 
   // Real-time subscription cleanup functions
-  const [friendRequestsUnsubscribe, setFriendRequestsUnsubscribe] = useState<(() => void) | null>(null);
-  const [friendshipsUnsubscribe, setFriendshipsUnsubscribe] = useState<(() => void) | null>(null);
-  const [conversationsUnsubscribe, setConversationsUnsubscribe] = useState<(() => void) | null>(null);
+  const [subscriptionsActive, setSubscriptionsActive] = useState(false);
 
   // Set nickname from profile when available
   useEffect(() => {
@@ -242,73 +240,74 @@ export const MainPage: React.FC = () => {
       const updatedFlameData = convertFriendsToFlames(updatedFriends);
       setUserConnections(updatedFlameData);
       
+      // Also update unread counts
+      await loadUnreadCounts(updatedFriends);
+      
       console.log('Flame strengths recalculated successfully');
     } catch (error) {
       console.error('Error recalculating flame strengths:', error);
     }
   }, []);
 
-  // Set up real-time subscriptions for friend requests
+  // Set up comprehensive real-time subscriptions
   useEffect(() => {
-    if (activeTab === 'friends') {
-      console.log('Setting up friend requests real-time subscription');
-      
-      const unsubscribe = friendsSubscriptionManager.subscribe('friend_requests', () => {
-        console.log('Friend requests updated via real-time subscription - triggering refresh');
-        // Trigger a full refresh to get updated data
-        loadFriendsData();
+    if (!subscriptionsActive) {
+      console.log('Setting up comprehensive real-time subscriptions');
+      setSubscriptionsActive(true);
+
+      // Subscribe to friend requests changes
+      const friendRequestsUnsubscribe = friendsSubscriptionManager.subscribe('friend_requests', (payload) => {
+        console.log('Friend requests real-time update:', payload);
+        // Trigger immediate refresh
+        setTimeout(() => {
+          loadFriendsData();
+        }, 500);
       });
-      
-      setFriendRequestsUnsubscribe(() => unsubscribe);
-      
-      return () => {
-        console.log('Cleaning up friend requests subscription');
-        unsubscribe();
-        setFriendRequestsUnsubscribe(null);
-      };
-    }
-  }, [activeTab, loadFriendsData]);
 
-  // Set up real-time subscriptions for friendships
-  useEffect(() => {
-    console.log('Setting up friendships real-time subscription');
-    
-    const unsubscribe = friendsSubscriptionManager.subscribe('friendships', () => {
-      console.log('Friendships updated via real-time subscription - triggering refresh');
-      // Trigger a full refresh to get updated data and recalculate strengths
-      loadFriendsData();
-    });
-    
-    setFriendshipsUnsubscribe(() => unsubscribe);
-    
-    return () => {
-      console.log('Cleaning up friendships subscription');
-      unsubscribe();
-      setFriendshipsUnsubscribe(null);
-    };
-  }, [loadFriendsData]);
+      // Subscribe to friendships changes
+      const friendshipsUnsubscribe = friendsSubscriptionManager.subscribe('friendships', (payload) => {
+        console.log('Friendships real-time update:', payload);
+        // Trigger immediate refresh
+        setTimeout(() => {
+          loadFriendsData();
+        }, 500);
+      });
 
-  // Set up real-time subscription for conversations (unread counts)
-  useEffect(() => {
-    if (!showChat) {
-      console.log('Setting up conversations real-time subscription');
-      
-      const unsubscribe = messagingSubscriptionManager.subscribeToConversations(() => {
-        console.log('Conversations updated via real-time subscription - updating unread counts');
+      // Subscribe to conversations changes (for unread counts)
+      const conversationsUnsubscribe = messagingSubscriptionManager.subscribeToConversations(() => {
+        console.log('Conversations real-time update - updating unread counts');
         if (friends.length > 0) {
-          loadUnreadCounts(friends);
+          setTimeout(() => {
+            loadUnreadCounts(friends);
+            // Also update flame strengths since new messages affect strength
+            recalculateFlameStrengths();
+          }, 500);
         }
       });
 
-      setConversationsUnsubscribe(() => unsubscribe);
-      
+      // Subscribe to messages table for immediate updates
+      const messagesUnsubscribe = messagingSubscriptionManager.subscribe('messages', (payload) => {
+        console.log('Messages real-time update:', payload);
+        // Update unread counts and flame strengths
+        setTimeout(() => {
+          if (friends.length > 0) {
+            loadUnreadCounts(friends);
+            recalculateFlameStrengths();
+          }
+        }, 500);
+      });
+
+      // Cleanup function
       return () => {
-        console.log('Cleaning up conversations subscription');
-        unsubscribe();
-        setConversationsUnsubscribe(null);
+        console.log('Cleaning up all real-time subscriptions');
+        friendRequestsUnsubscribe();
+        friendshipsUnsubscribe();
+        conversationsUnsubscribe();
+        messagesUnsubscribe();
+        setSubscriptionsActive(false);
       };
     }
-  }, [showChat, friends]);
+  }, [subscriptionsActive, loadFriendsData, friends, recalculateFlameStrengths]);
 
   // Load data on component mount with flame strength calculation
   useEffect(() => {
@@ -320,58 +319,35 @@ export const MainPage: React.FC = () => {
   useEffect(() => {
     const handleFriendRequestSent = () => {
       console.log('Friend request sent event received, refreshing...');
-      if (activeTab === 'friends') {
+      setTimeout(() => {
         loadFriendsData();
-      }
+      }, 1000);
     };
 
     const handleFriendRequestResponded = () => {
       console.log('Friend request responded event received, refreshing...');
-      if (activeTab === 'friends') {
+      setTimeout(() => {
         loadFriendsData();
-      }
+      }, 1000);
     };
 
-    window.addEventListener('friendRequestSent', handleFriendRequestSent);
-    window.addEventListener('friendRequestResponded', handleFriendRequestResponded);
-
-    return () => {
-      window.removeEventListener('friendRequestSent', handleFriendRequestSent);
-      window.removeEventListener('friendRequestResponded', handleFriendRequestResponded);
-    };
-  }, [activeTab, loadFriendsData]);
-
-  // Listen for message sent events to update flame strengths
-  useEffect(() => {
     const handleMessageSent = () => {
-      console.log('Message sent, updating flame strengths...');
-      // Delay to allow message to be processed
+      console.log('Message sent event received, updating flame strengths...');
       setTimeout(() => {
         recalculateFlameStrengths();
       }, 1000);
     };
 
+    window.addEventListener('friendRequestSent', handleFriendRequestSent);
+    window.addEventListener('friendRequestResponded', handleFriendRequestResponded);
     window.addEventListener('messageSent', handleMessageSent);
 
     return () => {
+      window.removeEventListener('friendRequestSent', handleFriendRequestSent);
+      window.removeEventListener('friendRequestResponded', handleFriendRequestResponded);
       window.removeEventListener('messageSent', handleMessageSent);
     };
-  }, [recalculateFlameStrengths]);
-
-  // Cleanup all subscriptions on unmount
-  useEffect(() => {
-    return () => {
-      if (friendRequestsUnsubscribe) {
-        friendRequestsUnsubscribe();
-      }
-      if (friendshipsUnsubscribe) {
-        friendshipsUnsubscribe();
-      }
-      if (conversationsUnsubscribe) {
-        conversationsUnsubscribe();
-      }
-    };
-  }, [friendRequestsUnsubscribe, friendshipsUnsubscribe, conversationsUnsubscribe]);
+  }, [loadFriendsData, recalculateFlameStrengths]);
 
   const handlePasswordChange = async () => {
     // Clear previous messages
@@ -433,7 +409,10 @@ export const MainPage: React.FC = () => {
       if (data?.success) {
         setFriendsMessage({ type: 'success', message: `Friend request sent to ${friendUsername}!` });
         setFriendUsername('');
-        // The real-time subscription will handle the refresh automatically
+        // Trigger immediate refresh
+        setTimeout(() => {
+          loadFriendsData();
+        }, 500);
       } else {
         throw new Error(data?.error || 'Failed to send friend request');
       }
@@ -482,7 +461,10 @@ export const MainPage: React.FC = () => {
 
       if (data?.success) {
         setFriendsMessage({ type: 'success', message: 'Friend request accepted successfully!' });
-        // The real-time subscription will handle the refresh automatically
+        // Trigger immediate refresh
+        setTimeout(() => {
+          loadFriendsData();
+        }, 500);
         console.log('Friend request accepted successfully');
       } else {
         throw new Error(data?.error || 'Failed to accept friend request');
@@ -508,7 +490,10 @@ export const MainPage: React.FC = () => {
 
       if (data?.success) {
         setFriendsMessage({ type: 'success', message: 'Friend request declined successfully' });
-        // The real-time subscription will handle the refresh automatically
+        // Trigger immediate refresh
+        setTimeout(() => {
+          loadFriendsData();
+        }, 500);
         console.log('Friend request declined successfully');
       } else {
         throw new Error(data?.error || 'Failed to decline friend request');
@@ -577,12 +562,12 @@ export const MainPage: React.FC = () => {
     setSelectedContact(null);
     // Refresh unread counts when closing chat
     if (friends.length > 0) {
-      loadUnreadCounts(friends);
+      setTimeout(() => {
+        loadUnreadCounts(friends);
+        // Also update flame strengths after chat interaction
+        recalculateFlameStrengths();
+      }, 1000);
     }
-    // Update flame strengths after closing chat
-    setTimeout(() => {
-      recalculateFlameStrengths();
-    }, 1000);
   };
 
   // Enhanced refresh function that recalculates flame strengths

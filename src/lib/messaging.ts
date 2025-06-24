@@ -193,6 +193,61 @@ class MessagingSubscriptionManager {
     };
   }
 
+  // Generic subscription method for any table
+  subscribe(table: string, callback: (data: any) => void) {
+    const key = table;
+    
+    // Add listener
+    if (!this.listeners[key]) {
+      this.listeners[key] = [];
+    }
+    this.listeners[key].push(callback);
+
+    // Create subscription if it doesn't exist
+    if (!this.subscriptions[key]) {
+      console.log(`Creating real-time subscription for table: ${table}`);
+      
+      this.subscriptions[key] = supabase
+        .channel(`${table}_changes`)
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: table
+          },
+          (payload) => {
+            console.log(`Real-time update for ${table}:`, payload);
+            this.listeners[key]?.forEach(listener => {
+              try {
+                listener(payload);
+              } catch (error) {
+                console.error(`Error in ${table} listener:`, error);
+              }
+            });
+          }
+        )
+        .subscribe((status) => {
+          console.log(`Subscription status for ${table}:`, status);
+        });
+    }
+
+    // Return unsubscribe function
+    return () => {
+      if (this.listeners[key]) {
+        this.listeners[key] = this.listeners[key].filter(l => l !== callback);
+        
+        // If no more listeners, remove subscription
+        if (this.listeners[key].length === 0) {
+          console.log(`Removing subscription for ${table}`);
+          this.subscriptions[key]?.unsubscribe();
+          delete this.subscriptions[key];
+          delete this.listeners[key];
+        }
+      }
+    };
+  }
+
   cleanup() {
     console.log('Cleaning up all messaging subscriptions');
     Object.values(this.subscriptions).forEach(subscription => {
