@@ -24,8 +24,8 @@ interface HearthProps {
   showUnreadIndicators?: boolean; // New prop to control unread indicators
 }
 
-// Stable position generator that only changes when flame count changes
-const generateStablePositions = (flameCount: number): Array<{x: number, y: number}> => {
+// Stable position generator that only changes when flame count changes or on initialization
+const generateStablePositions = (flameCount: number, existingPositions?: Array<{id: string, x: number, y: number}>): Array<{x: number, y: number}> => {
   if (flameCount === 0) return [];
   
   const positions: Array<{x: number, y: number}> = [];
@@ -33,13 +33,18 @@ const generateStablePositions = (flameCount: number): Array<{x: number, y: numbe
   const centerY = 50;
   const minDistance = 15; // Minimum distance between flames
   
+  // If we have existing positions and the count hasn't changed, reuse them
+  if (existingPositions && existingPositions.length === flameCount) {
+    return existingPositions.map(pos => ({ x: pos.x, y: pos.y }));
+  }
+  
   for (let index = 0; index < flameCount; index++) {
     let x, y;
     let attempts = 0;
     const maxAttempts = 50;
     
     do {
-      // Use deterministic spiral pattern based on index
+      // Use deterministic spiral pattern based on index for consistency
       const angle = (index * 2.4) + (index * 0.1); // Deterministic angle
       const radius = Math.sqrt(index + 1) * 8 + (index % 3) * 5; // Deterministic radius
       
@@ -80,20 +85,41 @@ export const Hearth: React.FC<HearthProps> = ({
   const hearthRef = useRef<HTMLDivElement>(null);
   const [autoZoomed, setAutoZoomed] = useState(false);
   
-  // Store stable positions based on flame count
-  const [stablePositions, setStablePositions] = useState<Array<{x: number, y: number}>>([]);
+  // Store stable positions with flame IDs to maintain consistency
+  const [stablePositions, setStablePositions] = useState<Array<{id: string, x: number, y: number}>>([]);
   const [lastFlameCount, setLastFlameCount] = useState(0);
+  const [initialized, setInitialized] = useState(false);
 
-  // Generate stable positions only when flame count changes
+  // Generate stable positions only when flame count changes or on initialization
   useEffect(() => {
-    if (flames.length !== lastFlameCount) {
-      console.log(`Flame count changed from ${lastFlameCount} to ${flames.length}, regenerating positions`);
-      const newPositions = generateStablePositions(flames.length);
-      setStablePositions(newPositions);
-      setLastFlameCount(flames.length);
-      setAutoZoomed(false); // Reset auto-zoom when count changes
+    const currentFlameCount = flames.length;
+    const shouldRegeneratePositions = !initialized || currentFlameCount !== lastFlameCount;
+    
+    if (shouldRegeneratePositions) {
+      console.log(`Generating positions - initialized: ${initialized}, count changed: ${lastFlameCount} -> ${currentFlameCount}`);
+      
+      const newPositions = generateStablePositions(currentFlameCount, stablePositions);
+      
+      // Map positions to flame IDs to maintain consistency
+      const positionsWithIds = flames.map((flame, index) => ({
+        id: flame.id,
+        x: newPositions[index]?.x || 50,
+        y: newPositions[index]?.y || 50
+      }));
+      
+      setStablePositions(positionsWithIds);
+      setLastFlameCount(currentFlameCount);
+      
+      if (!initialized) {
+        setInitialized(true);
+      }
+      
+      // Reset auto-zoom when count changes
+      if (currentFlameCount !== lastFlameCount) {
+        setAutoZoomed(false);
+      }
     }
-  }, [flames.length, lastFlameCount]);
+  }, [flames.length, flames, lastFlameCount, initialized, stablePositions]);
 
   // Auto-zoom to fit all flames on initialization or when count changes
   useEffect(() => {
@@ -241,18 +267,30 @@ export const Hearth: React.FC<HearthProps> = ({
     }
   }, [isDragging, handleMouseMove, handleMouseUp, handleTouchMove, handleTouchEnd]);
 
-  // Combine flames with stable positions
+  // Combine flames with stable positions - maintain position consistency
   const positionedFlames = useMemo(() => {
     if (flames.length === 0 || stablePositions.length === 0) {
       return [];
     }
 
-    return flames.map((flame, index) => {
-      const position = stablePositions[index] || stablePositions[0]; // Fallback to first position
+    return flames.map((flame) => {
+      // Find the stable position for this flame ID
+      const stablePosition = stablePositions.find(pos => pos.id === flame.id);
+      
+      if (stablePosition) {
+        return {
+          ...flame,
+          x: stablePosition.x,
+          y: stablePosition.y
+        };
+      }
+      
+      // Fallback to first available position if flame ID not found
+      const fallbackPosition = stablePositions[0] || { x: 50, y: 50 };
       return {
         ...flame,
-        x: position.x,
-        y: position.y
+        x: fallbackPosition.x,
+        y: fallbackPosition.y
       };
     });
   }, [flames, stablePositions]);

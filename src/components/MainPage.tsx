@@ -65,8 +65,8 @@ export const MainPage: React.FC = () => {
   const [friendshipsUnsubscribe, setFriendshipsUnsubscribe] = useState<(() => void) | null>(null);
   const [conversationsUnsubscribe, setConversationsUnsubscribe] = useState<(() => void) | null>(null);
 
-  // Loading state for flame strength calculations
-  const [calculatingStrengths, setCalculatingStrengths] = useState(false);
+  // Background polling for unread messages
+  const [backgroundPollingActive, setBackgroundPollingActive] = useState(true);
 
   // Set nickname from profile when available
   useEffect(() => {
@@ -153,12 +153,6 @@ export const MainPage: React.FC = () => {
       setFriends(friendsData);
       setFriendRequests(requestsData);
 
-      // Don't display flames until strengths are calculated
-      // This prevents the default strength glitch
-      if (friendsData.length === 0) {
-        setUserConnections([]);
-      }
-
       // Load unread message counts for each friend
       await loadUnreadCounts(friendsData);
 
@@ -193,11 +187,10 @@ export const MainPage: React.FC = () => {
     }
   };
 
-  // Recalculate flame strengths based on the formula
+  // Recalculate flame strengths and update display - no loading screen
   const recalculateFlameStrengths = useCallback(async () => {
     try {
-      console.log('Recalculating flame strengths...');
-      setCalculatingStrengths(true);
+      console.log('Recalculating flame strengths silently...');
       
       // Get the latest friends data
       const { data: friendsData, error } = await getFriends();
@@ -210,7 +203,6 @@ export const MainPage: React.FC = () => {
       if (friendsData.length === 0) {
         console.log('No friends to calculate strengths for');
         setUserConnections([]);
-        setCalculatingStrengths(false);
         return;
       }
       
@@ -236,8 +228,6 @@ export const MainPage: React.FC = () => {
       console.log('Flame strengths recalculated successfully');
     } catch (error) {
       console.error('Error recalculating flame strengths:', error);
-    } finally {
-      setCalculatingStrengths(false);
     }
   }, []);
 
@@ -287,27 +277,49 @@ export const MainPage: React.FC = () => {
     };
   }, [loadFriendsData, recalculateFlameStrengths]);
 
-  // Set up real-time subscription for conversations (unread counts)
+  // Background polling for unread messages when chat is not open
   useEffect(() => {
-    if (!showChat) {
-      console.log('Setting up conversations real-time subscription');
+    if (!showChat && backgroundPollingActive && friends.length > 0) {
+      console.log('Starting background polling for unread messages');
       
-      const unsubscribe = messagingSubscriptionManager.subscribeToConversations(() => {
-        console.log('Conversations updated via real-time subscription');
-        if (friends.length > 0) {
-          loadUnreadCounts(friends);
+      const interval = setInterval(async () => {
+        try {
+          // Check for new unread messages
+          const newUnreadCounts: { [userId: string]: number } = {};
+          let hasNewUnread = false;
+          
+          await Promise.all(
+            friends.map(async (friend) => {
+              const count = await getUnreadCountForUser(friend.friend_id);
+              if (count > 0) {
+                newUnreadCounts[friend.friend_id] = count;
+                // Check if this is a new unread message
+                if (count > (unreadCounts[friend.friend_id] || 0)) {
+                  hasNewUnread = true;
+                }
+              }
+            })
+          );
+          
+          // Update unread counts
+          setUnreadCounts(newUnreadCounts);
+          
+          // If there are new unread messages, recalculate flame strengths
+          if (hasNewUnread) {
+            console.log('New unread messages detected, updating flame strengths');
+            recalculateFlameStrengths();
+          }
+        } catch (error) {
+          console.error('Error in background polling:', error);
         }
-      });
-
-      setConversationsUnsubscribe(() => unsubscribe);
+      }, 5000); // Poll every 5 seconds
       
       return () => {
-        console.log('Cleaning up conversations subscription');
-        unsubscribe();
-        setConversationsUnsubscribe(null);
+        console.log('Stopping background polling');
+        clearInterval(interval);
       };
     }
-  }, [showChat, friends]);
+  }, [showChat, backgroundPollingActive, friends, unreadCounts, recalculateFlameStrengths]);
 
   // Load data on component mount
   useEffect(() => {
@@ -592,7 +604,6 @@ export const MainPage: React.FC = () => {
   const handleRefresh = async () => {
     console.log('Manual refresh triggered - recalculating flame strengths');
     setLoading(true);
-    setCalculatingStrengths(true);
     
     try {
       // First load the basic data
@@ -603,7 +614,6 @@ export const MainPage: React.FC = () => {
       console.error('Error during manual refresh:', error);
     } finally {
       setLoading(false);
-      setCalculatingStrengths(false);
     }
   };
 
@@ -670,7 +680,7 @@ export const MainPage: React.FC = () => {
             <div className="w-full min-h-screen flex items-center justify-center px-4 overflow-auto bg-black">
               <div className="w-full h-full relative">
                 {/* Empty Hearth State - Simplified */}
-                {userConnections.length === 0 && !calculatingStrengths && (
+                {userConnections.length === 0 && (
                   <div className="absolute inset-0 flex items-center justify-center z-30">
                     <IconedButton
                       icon={<UserPlus className="w-6 h-6" />}
@@ -684,36 +694,24 @@ export const MainPage: React.FC = () => {
                   </div>
                 )}
 
-                {/* Calculating Strengths Indicator */}
-                {calculatingStrengths && (
-                  <div className="absolute inset-0 flex items-center justify-center z-30">
-                    <div className="text-center">
-                      <div className="w-8 h-8 bg-ember rounded-full mx-auto animate-pulse mb-4" />
-                      <SmallText className="text-ember">Calculating flame strengths...</SmallText>
-                    </div>
-                  </div>
-                )}
-
                 {/* Responsive Hearth Component with scrolling support */}
-                {!calculatingStrengths && userConnections.length > 0 && (
-                  <div 
-                    className="w-full h-full overflow-auto scrollbar-hide"
-                    style={{
-                      minWidth: `${hearthDimensions.width}px`,
-                      minHeight: `${hearthDimensions.height}px`
-                    }}
-                  >
-                    <Hearth
-                      flames={enhancedUserConnections}
-                      width={hearthDimensions.width}
-                      height={hearthDimensions.height}
-                      onFlameClick={handleFlameClick}
-                      onRefresh={handleRefresh}
-                      className="w-full h-full"
-                      showUnreadIndicators={true}
-                    />
-                  </div>
-                )}
+                <div 
+                  className="w-full h-full overflow-auto scrollbar-hide"
+                  style={{
+                    minWidth: `${hearthDimensions.width}px`,
+                    minHeight: `${hearthDimensions.height}px`
+                  }}
+                >
+                  <Hearth
+                    flames={enhancedUserConnections}
+                    width={hearthDimensions.width}
+                    height={hearthDimensions.height}
+                    onFlameClick={handleFlameClick}
+                    onRefresh={handleRefresh}
+                    className="w-full h-full"
+                    showUnreadIndicators={true}
+                  />
+                </div>
               </div>
             </div>
           )}
