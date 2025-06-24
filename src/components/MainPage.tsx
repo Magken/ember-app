@@ -119,11 +119,13 @@ export const MainPage: React.FC = () => {
     return () => window.removeEventListener('resize', updateDimensions);
   }, []);
 
-  // Load friends and friend requests
+  // Load friends and friend requests with flame strength calculation
   const loadFriendsData = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
+
+      console.log('Loading friends data with flame strength calculation...');
 
       // Load friends and friend requests in parallel
       const [friendsResult, requestsResult] = await Promise.all([
@@ -145,15 +147,33 @@ export const MainPage: React.FC = () => {
       console.log('Loaded friends:', friendsData.length);
       console.log('Loaded requests:', requestsData.length);
 
-      setFriends(friendsData);
+      // Calculate actual flame strengths for each friend
+      const friendsWithCalculatedStrengths = await Promise.all(
+        friendsData.map(async (friend) => {
+          try {
+            const calculatedStrength = await calculateFlameStrength(friend.friend_id);
+            return {
+              ...friend,
+              connection_strength: calculatedStrength
+            };
+          } catch (err) {
+            console.error(`Failed to calculate strength for ${friend.friend_id}:`, err);
+            return friend; // Keep original strength on error
+          }
+        })
+      );
+
+      setFriends(friendsWithCalculatedStrengths);
       setFriendRequests(requestsData);
 
-      // Convert friends to flame data for hearth
-      const flameData = convertFriendsToFlames(friendsData);
+      // Convert friends to flame data for hearth with calculated strengths
+      const flameData = convertFriendsToFlames(friendsWithCalculatedStrengths);
       setUserConnections(flameData);
 
       // Load unread message counts for each friend
-      await loadUnreadCounts(friendsData);
+      await loadUnreadCounts(friendsWithCalculatedStrengths);
+
+      console.log('Friends data loaded with calculated flame strengths');
 
     } catch (err: any) {
       console.error('Error loading friends data:', err);
@@ -179,6 +199,7 @@ export const MainPage: React.FC = () => {
       );
       
       setUnreadCounts(counts);
+      console.log('Unread counts updated:', counts);
     } catch (error) {
       console.error('Error loading unread counts:', error);
     }
@@ -233,13 +254,9 @@ export const MainPage: React.FC = () => {
       console.log('Setting up friend requests real-time subscription');
       
       const unsubscribe = friendsSubscriptionManager.subscribe('friend_requests', () => {
-        console.log('Friend requests updated via real-time subscription');
-        // Reload friend requests data
-        getFriendRequests().then(({ data, error }) => {
-          if (!error && data) {
-            setFriendRequests(data);
-          }
-        });
+        console.log('Friend requests updated via real-time subscription - triggering refresh');
+        // Trigger a full refresh to get updated data
+        loadFriendsData();
       });
       
       setFriendRequestsUnsubscribe(() => unsubscribe);
@@ -250,18 +267,16 @@ export const MainPage: React.FC = () => {
         setFriendRequestsUnsubscribe(null);
       };
     }
-  }, [activeTab]);
+  }, [activeTab, loadFriendsData]);
 
   // Set up real-time subscriptions for friendships
   useEffect(() => {
     console.log('Setting up friendships real-time subscription');
     
     const unsubscribe = friendsSubscriptionManager.subscribe('friendships', () => {
-      console.log('Friendships updated via real-time subscription');
-      // Reload friends data and recalculate flame strengths
-      loadFriendsData().then(() => {
-        recalculateFlameStrengths();
-      });
+      console.log('Friendships updated via real-time subscription - triggering refresh');
+      // Trigger a full refresh to get updated data and recalculate strengths
+      loadFriendsData();
     });
     
     setFriendshipsUnsubscribe(() => unsubscribe);
@@ -271,7 +286,7 @@ export const MainPage: React.FC = () => {
       unsubscribe();
       setFriendshipsUnsubscribe(null);
     };
-  }, [loadFriendsData, recalculateFlameStrengths]);
+  }, [loadFriendsData]);
 
   // Set up real-time subscription for conversations (unread counts)
   useEffect(() => {
@@ -279,7 +294,7 @@ export const MainPage: React.FC = () => {
       console.log('Setting up conversations real-time subscription');
       
       const unsubscribe = messagingSubscriptionManager.subscribeToConversations(() => {
-        console.log('Conversations updated via real-time subscription');
+        console.log('Conversations updated via real-time subscription - updating unread counts');
         if (friends.length > 0) {
           loadUnreadCounts(friends);
         }
@@ -295,8 +310,9 @@ export const MainPage: React.FC = () => {
     }
   }, [showChat, friends]);
 
-  // Load data on component mount
+  // Load data on component mount with flame strength calculation
   useEffect(() => {
+    console.log('Component mounted - loading initial data with flame strengths');
     loadFriendsData();
   }, [loadFriendsData]);
 
@@ -574,10 +590,8 @@ export const MainPage: React.FC = () => {
     console.log('Manual refresh triggered - recalculating flame strengths');
     setLoading(true);
     try {
-      // First load the basic data
+      // Load fresh data with calculated flame strengths
       await loadFriendsData();
-      // Then recalculate flame strengths with current data
-      await recalculateFlameStrengths();
     } catch (error) {
       console.error('Error during manual refresh:', error);
     } finally {
