@@ -18,6 +18,7 @@ import {
   convertFriendsToFlames,
   formatTimeAgo,
   validateUniqueCode,
+  friendsSubscriptionManager,
   type FriendRequest,
   type Friend,
   type FlameData
@@ -59,10 +60,10 @@ export const MainPage: React.FC = () => {
   // Unread messages state
   const [unreadCounts, setUnreadCounts] = useState<{ [userId: string]: number }>({});
 
-  // Polling control states - separate for each type
-  const [friendsPollingActive, setFriendsPollingActive] = useState(false);
-  const [unreadCountsPollingActive, setUnreadCountsPollingActive] = useState(true);
-  const [flameStrengthPollingActive, setFlameStrengthPollingActive] = useState(true);
+  // Real-time subscription cleanup functions
+  const [friendRequestsUnsubscribe, setFriendRequestsUnsubscribe] = useState<(() => void) | null>(null);
+  const [friendshipsUnsubscribe, setFriendshipsUnsubscribe] = useState<(() => void) | null>(null);
+  const [conversationsUnsubscribe, setConversationsUnsubscribe] = useState<(() => void) | null>(null);
 
   // Set nickname from profile when available
   useEffect(() => {
@@ -226,17 +227,73 @@ export const MainPage: React.FC = () => {
     }
   }, []);
 
-  // Set up real-time subscription for conversations
+  // Set up real-time subscriptions for friend requests
   useEffect(() => {
-    const unsubscribe = messagingSubscriptionManager.subscribeToConversations(() => {
-      console.log('Conversations updated, refreshing unread counts...');
-      if (friends.length > 0) {
-        loadUnreadCounts(friends);
-      }
-    });
+    if (activeTab === 'friends') {
+      console.log('Setting up friend requests real-time subscription');
+      
+      const unsubscribe = friendsSubscriptionManager.subscribe('friend_requests', () => {
+        console.log('Friend requests updated via real-time subscription');
+        // Reload friend requests data
+        getFriendRequests().then(({ data, error }) => {
+          if (!error && data) {
+            setFriendRequests(data);
+          }
+        });
+      });
+      
+      setFriendRequestsUnsubscribe(() => unsubscribe);
+      
+      return () => {
+        console.log('Cleaning up friend requests subscription');
+        unsubscribe();
+        setFriendRequestsUnsubscribe(null);
+      };
+    }
+  }, [activeTab]);
 
-    return unsubscribe;
-  }, [friends]);
+  // Set up real-time subscriptions for friendships
+  useEffect(() => {
+    console.log('Setting up friendships real-time subscription');
+    
+    const unsubscribe = friendsSubscriptionManager.subscribe('friendships', () => {
+      console.log('Friendships updated via real-time subscription');
+      // Reload friends data and recalculate flame strengths
+      loadFriendsData().then(() => {
+        recalculateFlameStrengths();
+      });
+    });
+    
+    setFriendshipsUnsubscribe(() => unsubscribe);
+    
+    return () => {
+      console.log('Cleaning up friendships subscription');
+      unsubscribe();
+      setFriendshipsUnsubscribe(null);
+    };
+  }, [loadFriendsData, recalculateFlameStrengths]);
+
+  // Set up real-time subscription for conversations (unread counts)
+  useEffect(() => {
+    if (!showChat) {
+      console.log('Setting up conversations real-time subscription');
+      
+      const unsubscribe = messagingSubscriptionManager.subscribeToConversations(() => {
+        console.log('Conversations updated via real-time subscription');
+        if (friends.length > 0) {
+          loadUnreadCounts(friends);
+        }
+      });
+
+      setConversationsUnsubscribe(() => unsubscribe);
+      
+      return () => {
+        console.log('Cleaning up conversations subscription');
+        unsubscribe();
+        setConversationsUnsubscribe(null);
+      };
+    }
+  }, [showChat, friends]);
 
   // Load data on component mount
   useEffect(() => {
@@ -268,62 +325,6 @@ export const MainPage: React.FC = () => {
     };
   }, [activeTab, loadFriendsData]);
 
-  // 5-second polling for friend requests when friends tab is open - FIXED: Only when tab is active
-  useEffect(() => {
-    if (activeTab === 'friends' && !friendsPollingActive) {
-      setFriendsPollingActive(true);
-      
-      const interval = setInterval(() => {
-        console.log('Polling for friend requests...');
-        getFriendRequests().then(({ data, error }) => {
-          if (!error && data) {
-            // Only update if data actually changed to prevent unnecessary re-renders
-            setFriendRequests(prev => {
-              if (JSON.stringify(prev) !== JSON.stringify(data)) {
-                return data;
-              }
-              return prev;
-            });
-          }
-        });
-      }, 5000); // 5 seconds
-      
-      return () => {
-        clearInterval(interval);
-        setFriendsPollingActive(false);
-      };
-    }
-  }, [activeTab, friendsPollingActive]);
-
-  // 5-second polling for unread message counts when hearth is visible - FIXED: Only when hearth is visible
-  useEffect(() => {
-    if (!showChat && unreadCountsPollingActive) {
-      const interval = setInterval(() => {
-        console.log('Polling for unread message counts...');
-        if (friends.length > 0) {
-          loadUnreadCounts(friends);
-        }
-      }, 5000); // 5 seconds
-      
-      return () => clearInterval(interval);
-    }
-  }, [showChat, unreadCountsPollingActive, friends]);
-
-  // 30-minute polling for flame strength recalculation - FIXED: Only when hearth is visible
-  useEffect(() => {
-    if (flameStrengthPollingActive && !showChat) {
-      // Initial calculation
-      recalculateFlameStrengths();
-      
-      const interval = setInterval(() => {
-        console.log('Recalculating flame strengths (30-minute interval)...');
-        recalculateFlameStrengths();
-      }, 30 * 60 * 1000); // 30 minutes
-      
-      return () => clearInterval(interval);
-    }
-  }, [flameStrengthPollingActive, recalculateFlameStrengths, showChat]);
-
   // Listen for message sent events to update flame strengths
   useEffect(() => {
     const handleMessageSent = () => {
@@ -340,6 +341,21 @@ export const MainPage: React.FC = () => {
       window.removeEventListener('messageSent', handleMessageSent);
     };
   }, [recalculateFlameStrengths]);
+
+  // Cleanup all subscriptions on unmount
+  useEffect(() => {
+    return () => {
+      if (friendRequestsUnsubscribe) {
+        friendRequestsUnsubscribe();
+      }
+      if (friendshipsUnsubscribe) {
+        friendshipsUnsubscribe();
+      }
+      if (conversationsUnsubscribe) {
+        conversationsUnsubscribe();
+      }
+    };
+  }, [friendRequestsUnsubscribe, friendshipsUnsubscribe, conversationsUnsubscribe]);
 
   const handlePasswordChange = async () => {
     // Clear previous messages
@@ -401,7 +417,7 @@ export const MainPage: React.FC = () => {
       if (data?.success) {
         setFriendsMessage({ type: 'success', message: `Friend request sent to ${friendUsername}!` });
         setFriendUsername('');
-        // The custom event will trigger refresh automatically
+        // The real-time subscription will handle the refresh automatically
       } else {
         throw new Error(data?.error || 'Failed to send friend request');
       }
@@ -450,7 +466,7 @@ export const MainPage: React.FC = () => {
 
       if (data?.success) {
         setFriendsMessage({ type: 'success', message: 'Friend request accepted successfully!' });
-        // The custom event will trigger refresh automatically
+        // The real-time subscription will handle the refresh automatically
         console.log('Friend request accepted successfully');
       } else {
         throw new Error(data?.error || 'Failed to accept friend request');
@@ -476,7 +492,7 @@ export const MainPage: React.FC = () => {
 
       if (data?.success) {
         setFriendsMessage({ type: 'success', message: 'Friend request declined successfully' });
-        // The custom event will trigger refresh automatically
+        // The real-time subscription will handle the refresh automatically
         console.log('Friend request declined successfully');
       } else {
         throw new Error(data?.error || 'Failed to decline friend request');
@@ -551,6 +567,22 @@ export const MainPage: React.FC = () => {
     setTimeout(() => {
       recalculateFlameStrengths();
     }, 1000);
+  };
+
+  // Enhanced refresh function that recalculates flame strengths
+  const handleRefresh = async () => {
+    console.log('Manual refresh triggered - recalculating flame strengths');
+    setLoading(true);
+    try {
+      // First load the basic data
+      await loadFriendsData();
+      // Then recalculate flame strengths with current data
+      await recalculateFlameStrengths();
+    } catch (error) {
+      console.error('Error during manual refresh:', error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const incomingRequests = friendRequests.filter(req => req.request_type === 'incoming' && req.status === 'pending');
@@ -643,7 +675,7 @@ export const MainPage: React.FC = () => {
                     width={hearthDimensions.width}
                     height={hearthDimensions.height}
                     onFlameClick={handleFlameClick}
-                    onRefresh={loadFriendsData}
+                    onRefresh={handleRefresh}
                     className="w-full h-full"
                     showUnreadIndicators={true}
                   />
@@ -681,8 +713,8 @@ export const MainPage: React.FC = () => {
                           : 'text-ash hover:text-softwhite'
                       }`}
                     >
-                      {/* Ember particles for active tab - FIXED: Only show when tab is active and not during polling */}
-                      {activeTab === 'profile' && !friendsPollingActive && Array.from({ length: 12 }).map((_, i) => (
+                      {/* Ember particles for active tab - Only show when tab is active */}
+                      {activeTab === 'profile' && Array.from({ length: 12 }).map((_, i) => (
                         <span
                           key={`profile-ember-${i}`}
                           className="absolute rounded-full pointer-events-none z-10 animate-ember"
@@ -711,8 +743,8 @@ export const MainPage: React.FC = () => {
                           : 'text-ash hover:text-softwhite'
                       }`}
                     >
-                      {/* Ember particles for active tab - FIXED: Only show when tab is active and not during polling */}
-                      {activeTab === 'friends' && !friendsPollingActive && Array.from({ length: 12 }).map((_, i) => (
+                      {/* Ember particles for active tab - Only show when tab is active */}
+                      {activeTab === 'friends' && Array.from({ length: 12 }).map((_, i) => (
                         <span
                           key={`friends-ember-${i}`}
                           className="absolute rounded-full pointer-events-none z-10 animate-ember"
@@ -905,7 +937,7 @@ export const MainPage: React.FC = () => {
                             label="Refresh"
                             size="sm"
                             variant="ghost"
-                            onClick={loadFriendsData}
+                            onClick={handleRefresh}
                           />
                         </div>
                         <TextBlock className="text-sm text-ash mb-6">
