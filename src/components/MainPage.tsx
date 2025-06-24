@@ -23,7 +23,7 @@ import {
   type Friend,
   type FlameData
 } from '../lib/friends';
-import { getUserConversations, getUnreadCountForUser, messagingSubscriptionManager } from '../lib/messaging';
+import { getUserConversations, getUnreadCountForUserDirect, messagingSubscriptionManager } from '../lib/messaging';
 import { updateProfile, changePassword, signOut, deleteAccount } from '../lib/auth';
 import { calculateFlameStrength } from '../lib/flameStrength';
 
@@ -114,23 +114,25 @@ export const MainPage: React.FC = () => {
     return () => window.removeEventListener('resize', updateDimensions);
   }, []);
 
-  // Load unread message counts for friends
+  // 🔥 ENHANCED: Load unread message counts using the direct method
   const loadUnreadCounts = async (friendsList: Friend[]) => {
     try {
+      console.log('🔥 Loading unread counts for', friendsList.length, 'friends');
       const counts: { [userId: string]: number } = {};
       
-      // Get unread count for each friend
+      // Get unread count for each friend using the direct method
       await Promise.all(
         friendsList.map(async (friend) => {
-          const count = await getUnreadCountForUser(friend.friend_id);
+          const count = await getUnreadCountForUserDirect(friend.friend_id);
           if (count > 0) {
             counts[friend.friend_id] = count;
+            console.log(`🔥 Friend ${friend.friend_nickname} has ${count} unread messages`);
           }
         })
       );
       
       setUnreadCounts(counts);
-      console.log('📬 Unread counts updated:', counts);
+      console.log('🔥 Final unread counts:', counts);
     } catch (error) {
       console.error('Error loading unread counts:', error);
     }
@@ -205,9 +207,9 @@ export const MainPage: React.FC = () => {
     handleRefresh();
   }, [handleRefresh]);
 
-  // Set up real-time subscriptions that LITERALLY just call handleRefresh
+  // 🔥 ENHANCED: Set up real-time subscriptions that trigger immediate refresh
   useEffect(() => {
-    console.log('🔗 Setting up real-time subscriptions');
+    console.log('🔗 Setting up enhanced real-time subscriptions');
     
     // Friend requests subscription
     const friendRequestsUnsubscribe = friendsSubscriptionManager.subscribe('friend_requests', () => {
@@ -227,12 +229,20 @@ export const MainPage: React.FC = () => {
       handleRefresh();
     });
 
+    // 🔥 NEW: Subscribe to ALL message changes for immediate unread count updates
+    const allMessagesUnsubscribe = messagingSubscriptionManager.subscribeToAllMessages(() => {
+      console.log('🔥 MESSAGE ACTIVITY DETECTED - calling handleRefresh()');
+      // Small delay to ensure database is updated
+      setTimeout(handleRefresh, 200);
+    });
+
     // Cleanup function
     return () => {
       console.log('🧹 Cleaning up real-time subscriptions');
       friendRequestsUnsubscribe();
       friendshipsUnsubscribe();
       conversationsUnsubscribe();
+      allMessagesUnsubscribe();
     };
   }, [handleRefresh]);
 
