@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState } from 'react';
 import { BurningPaperCard } from './ui/Card';
 import { EmberButton } from './ui/Button';
 import { InputBox } from './ui/InputBox';
@@ -7,7 +7,8 @@ import { CheckButton } from './ui/CheckButton';
 import { IconedButton } from './ui/IconedButton';
 import { Heading1, Heading2, Heading3, TextBlock, SmallText } from './ui/Typography';
 import { Hearth } from './ui/Hearth';
-import { Sparkles, Eye, MessageCircle, Zap, Users } from 'lucide-react';
+import { Sparkles, Eye, MessageCircle, Zap, Users, AlertCircle, CheckCircle } from 'lucide-react';
+import { signUp, signIn, validateEmail, validatePasswordStrength } from '../lib/auth';
 
 const EMBER_COLORS = [
   '255,191,0',   // ember yellow
@@ -79,6 +80,16 @@ export const LandingPage: React.FC = () => {
   const [agreeToTerms, setAgreeToTerms] = useState(false);
   const [hoveredLetter, setHoveredLetter] = useState<string | null>(null);
   
+  // Authentication state
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
+  
+  // Real-time validation states
+  const [emailValid, setEmailValid] = useState<boolean | null>(null);
+  const [passwordErrors, setPasswordErrors] = useState<string[]>([]);
+  const [passwordsMatch, setPasswordsMatch] = useState<boolean | null>(null);
+  
   // Feature card expansion states - separate for each feature
   const [expandedCanvas, setExpandedCanvas] = useState(false);
   const [expandedMessages, setExpandedMessages] = useState(false);
@@ -92,8 +103,111 @@ export const LandingPage: React.FC = () => {
     }
   };
 
+  // Real-time email validation
+  const handleEmailChange = (value: string) => {
+    setEmail(value);
+    if (value) {
+      setEmailValid(validateEmail(value));
+    } else {
+      setEmailValid(null);
+    }
+  };
+
+  // Real-time password validation
+  const handlePasswordChange = (value: string) => {
+    setPassword(value);
+    if (value) {
+      const validation = validatePasswordStrength(value);
+      setPasswordErrors(validation.errors);
+    } else {
+      setPasswordErrors([]);
+    }
+    
+    // Check if passwords match
+    if (confirmPassword) {
+      setPasswordsMatch(value === confirmPassword);
+    }
+  };
+
+  // Real-time confirm password validation
+  const handleConfirmPasswordChange = (value: string) => {
+    setConfirmPassword(value);
+    if (value && password) {
+      setPasswordsMatch(password === value);
+    } else {
+      setPasswordsMatch(null);
+    }
+  };
+
+  // Handle form submission
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setLoading(true);
+
+    try {
+      if (activeTab === 'signup') {
+        // Sign up validation
+        if (!validateEmail(email)) {
+          throw new Error('Please enter a valid email address');
+        }
+
+        const passwordValidation = validatePasswordStrength(password);
+        if (!passwordValidation.valid) {
+          throw new Error(passwordValidation.errors.join('. '));
+        }
+
+        if (password !== confirmPassword) {
+          throw new Error('Passwords do not match');
+        }
+
+        if (!nickname.trim() || nickname.length < 2 || nickname.length > 50) {
+          throw new Error('Nickname must be between 2 and 50 characters');
+        }
+
+        if (!agreeToTerms) {
+          throw new Error('You must agree to the terms and conditions');
+        }
+
+        const { data, error } = await signUp(email, password, nickname, agreeToTerms);
+
+        if (error) {
+          throw error;
+        }
+
+        if (data.user) {
+          setSuccess(true);
+        }
+      } else {
+        // Sign in validation
+        if (!validateEmail(email)) {
+          throw new Error('Please enter a valid email address');
+        }
+
+        if (!password) {
+          throw new Error('Please enter your password');
+        }
+
+        const { data, error } = await signIn(email, password);
+
+        if (error) {
+          throw error;
+        }
+
+        if (data.user) {
+          // Redirect to main app
+          window.location.href = '/';
+        }
+      }
+    } catch (err: any) {
+      setError(err.message || 'An error occurred during authentication');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Generate clip paths for each letter
-  const letterClipPaths = useMemo(() => ({
+  const letterClipPaths = React.useMemo(() => ({
     e: generateLetterClipPath(1),
     m: generateLetterClipPath(2),
     b: generateLetterClipPath(3),
@@ -101,7 +215,7 @@ export const LandingPage: React.FC = () => {
   }), []);
 
   // Generate massive ember particle system
-  const massiveEmberParticles = useMemo(() => {
+  const massiveEmberParticles = React.useMemo(() => {
     return Array.from({ length: 120 }).map((_, i) => ({
       left: `${rand(-10, 110)}%`,
       top: `${rand(-10, 110)}%`,
@@ -118,7 +232,7 @@ export const LandingPage: React.FC = () => {
   }, []);
 
   // Generate flickering flame elements
-  const flickeringFlames = useMemo(() => {
+  const flickeringFlames = React.useMemo(() => {
     return Array.from({ length: 40 }).map((_, i) => ({
       left: `${rand(5, 95)}%`,
       top: `${rand(5, 95)}%`,
@@ -139,6 +253,48 @@ export const LandingPage: React.FC = () => {
     { id: '4', x: 25, y: 75, strength: 0.2, size: 40, name: 'Alex' },
     { id: '5', x: 75, y: 80, strength: 0.8, size: 65, name: 'David' },
   ];
+
+  // Show success message for sign up
+  if (success && activeTab === 'signup') {
+    return (
+      <div className="min-h-screen bg-[var(--color-dark)] text-[var(--color-white)] flex items-center justify-center px-8 py-16">
+        <div className="max-w-md mx-auto">
+          <BurningPaperCard glowOnHover className="text-center">
+            <div className="space-y-6">
+              <div className="w-16 h-16 bg-gradient-to-br from-ember to-carmine rounded-full mx-auto flex items-center justify-center">
+                <CheckCircle className="w-8 h-8 text-dark" />
+              </div>
+              <div>
+                <Heading2 className="text-ember mb-4">Check Your Email</Heading2>
+                <TextBlock className="text-ash mb-6">
+                  We've sent a verification link to <strong className="text-softwhite">{email}</strong>. 
+                  Please check your email and click the link to activate your account.
+                </TextBlock>
+                <SmallText className="text-ash">
+                  Didn't receive the email? Check your spam folder or try signing up again.
+                </SmallText>
+              </div>
+              <button
+                onClick={() => {
+                  setSuccess(false);
+                  setActiveTab('login');
+                  setEmail('');
+                  setPassword('');
+                  setNickname('');
+                  setConfirmPassword('');
+                  setAgreeToTerms(false);
+                  setError(null);
+                }}
+                className="text-ember hover:text-carmine transition-colors text-sm"
+              >
+                Back to Sign In
+              </button>
+            </div>
+          </BurningPaperCard>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[var(--color-dark)] text-[var(--color-white)]">
@@ -257,79 +413,6 @@ export const LandingPage: React.FC = () => {
                     }}
                   />
 
-                  {/* Massive hover explosion effect */}
-                  {hoveredLetter === letter && (
-                    <>
-                      {/* Primary explosion glow */}
-                      <div
-                        className="absolute inset-0 pointer-events-none z-2"
-                        style={{
-                          clipPath: letterClipPaths[letter as keyof typeof letterClipPaths],
-                          WebkitClipPath: letterClipPaths[letter as keyof typeof letterClipPaths],
-                          background: `radial-gradient(closest-side, rgba(255,191,0,1), rgba(255,140,0,0.8) 30%, rgba(255,69,0,0.6) 60%, transparent 80%)`,
-                          filter: 'blur(25px)',
-                          transform: 'scale(2.2)',
-                          mixBlendMode: 'screen',
-                          animation: 'emberPulse 0.3s ease-in-out infinite'
-                        }}
-                      />
-                      
-                      {/* Secondary explosion ring */}
-                      <div
-                        className="absolute inset-0 pointer-events-none z-1"
-                        style={{
-                          clipPath: letterClipPaths[letter as keyof typeof letterClipPaths],
-                          WebkitClipPath: letterClipPaths[letter as keyof typeof letterClipPaths],
-                          background: `radial-gradient(closest-side, transparent 20%, rgba(255,191,0,0.4) 40%, rgba(255,140,0,0.3) 70%, transparent 90%)`,
-                          filter: 'blur(35px)',
-                          transform: 'scale(3)',
-                          mixBlendMode: 'screen',
-                          animation: 'emberPulse 0.4s ease-in-out infinite reverse'
-                        }}
-                      />
-                    </>
-                  )}
-
-                  {/* Individual letter ember particles - Enhanced on hover */}
-                  {Array.from({ length: hoveredLetter === letter ? 40 : 15 }).map((_, i) => (
-                    <span
-                      key={`letter-ember-${letter}-${i}`}
-                      className="absolute rounded-full pointer-events-none z-10 animate-ember"
-                      style={{
-                        width: `${rand(1, hoveredLetter === letter ? 4 : 2.5)}px`,
-                        height: `${rand(1, hoveredLetter === letter ? 4 : 2.5)}px`,
-                        backgroundColor: `rgb(${randColor(EMBER_COLORS)})`,
-                        left: `${rand(-10, 110)}%`,
-                        top: `${rand(-10, 110)}%`,
-                        filter: `blur(0.5px) brightness(${rand(hoveredLetter === letter ? 3 : 1, hoveredLetter === letter ? 4 : 2)})`,
-                        animationDelay: `${rand(0, 4)}s`,
-                        animationDuration: `${rand(hoveredLetter === letter ? 0.5 : 2, hoveredLetter === letter ? 1 : 4)}s`,
-                        boxShadow: `0 0 ${hoveredLetter === letter ? 8 : 3}px currentColor`,
-                        mixBlendMode: 'screen'
-                      } as React.CSSProperties}
-                    />
-                  ))}
-
-                  {/* Individual letter flame licks - Enhanced on hover */}
-                  {Array.from({ length: hoveredLetter === letter ? 20 : 8 }).map((_, i) => (
-                    <div
-                      key={`letter-flame-${letter}-${i}`}
-                      className="absolute pointer-events-none z-12 flame-lick"
-                      style={{
-                        width: `${rand(1.5, hoveredLetter === letter ? 6 : 3)}px`,
-                        height: `${rand(4, hoveredLetter === letter ? 18 : 8)}px`,
-                        left: `${rand(10, 90)}%`,
-                        top: `${rand(5, 95)}%`,
-                        background: `linear-gradient(to top, rgb(${randColor(EMBER_COLORS.slice(0, 3))}), rgba(${randColor(EMBER_COLORS.slice(0, 3))}, 0.6), transparent)`,
-                        borderRadius: '50% 50% 50% 50% / 60% 60% 40% 40%',
-                        animationDelay: `${rand(0, 2)}s`,
-                        animationDuration: `${rand(0.2, hoveredLetter === letter ? 0.4 : 1)}s`,
-                        filter: `blur(0.5px) brightness(${hoveredLetter === letter ? 3 : 1})`,
-                        mixBlendMode: 'screen'
-                      } as React.CSSProperties}
-                    />
-                  ))}
-
                   {/* Main letter with original gradient coloration - 20% Larger */}
                   <span 
                     className="relative z-10 text-7xl md:text-9xl font-bold font-[var(--font-display)] inline-block px-3 transition-all duration-500"
@@ -343,21 +426,6 @@ export const LandingPage: React.FC = () => {
                       filter: `drop-shadow(0 0 ${hoveredLetter === letter ? 25 : 12 + index * 3}px rgba(255, 140, 0, ${hoveredLetter === letter ? 1 : 0.8}))`,
                       textShadow: `0 0 ${hoveredLetter === letter ? 40 : 25 + index * 8}px rgba(255, 191, 0, ${hoveredLetter === letter ? 0.9 : 0.6})`,
                       transform: `rotate(${index * 1.5 - 2.25}deg)`,
-                    }}
-                  >
-                    {letter}
-                  </span>
-
-                  {/* Individual pulsing glow overlay for each letter - Enhanced */}
-                  <span 
-                    className="absolute inset-0 text-7xl md:text-9xl font-bold font-[var(--font-display)] inline-block px-3 animate-pulse opacity-30 blur-sm pointer-events-none z-5 transition-all duration-500"
-                    style={{
-                      clipPath: letterClipPaths[letter as keyof typeof letterClipPaths],
-                      WebkitClipPath: letterClipPaths[letter as keyof typeof letterClipPaths],
-                      color: '#FFBF00',
-                      animationDelay: `${index * 0.3}s`,
-                      animationDuration: `${hoveredLetter === letter ? 0.2 : 2 + index * 0.2}s`,
-                      filter: `brightness(${hoveredLetter === letter ? 4 : 1}) blur(${hoveredLetter === letter ? 3 : 1}px)`
                     }}
                   >
                     {letter}
@@ -401,7 +469,10 @@ export const LandingPage: React.FC = () => {
             {/* Interactive Tab Navigation with Ember Effects */}
             <div className="flex mb-8 -mx-4 -mt-4 relative">
               <button
-                onClick={() => setActiveTab('signup')}
+                onClick={() => {
+                  setActiveTab('signup');
+                  setError(null);
+                }}
                 className={`flex-1 px-6 py-4 text-center font-medium transition-all duration-300 relative overflow-visible ${
                   activeTab === 'signup'
                     ? 'text-ember border-b-2 border-ember'
@@ -430,7 +501,10 @@ export const LandingPage: React.FC = () => {
                 Join Embr
               </button>
               <button
-                onClick={() => setActiveTab('login')}
+                onClick={() => {
+                  setActiveTab('login');
+                  setError(null);
+                }}
                 className={`flex-1 px-6 py-4 text-center font-medium transition-all duration-300 relative overflow-visible ${
                   activeTab === 'login'
                     ? 'text-ember border-b-2 border-ember'
@@ -460,53 +534,124 @@ export const LandingPage: React.FC = () => {
               </button>
             </div>
 
+            {/* Error Message */}
+            {error && (
+              <div className="p-4 bg-carmine/20 border border-carmine/50 rounded-soft flex items-start gap-3 mb-6">
+                <AlertCircle className="w-5 h-5 text-carmine flex-shrink-0 mt-0.5" />
+                <div>
+                  <SmallText className="text-carmine font-medium">Error</SmallText>
+                  <SmallText className="text-carmine">{error}</SmallText>
+                </div>
+              </div>
+            )}
+
             {/* Form Content */}
-            <div className="space-y-6">
+            <form onSubmit={handleSubmit} className="space-y-6">
               <div>
                 <label className="block text-sm font-medium text-softwhite mb-2">
-                  Email or username
+                  Email Address *
                 </label>
-                <InputBox
-                  value={email}
-                  onChange={setEmail}
-                  placeholder="your@email.com"
-                />
+                <div className="relative">
+                  <InputBox
+                    value={email}
+                    onChange={handleEmailChange}
+                    placeholder="your@email.com"
+                    className={`pr-10 ${
+                      emailValid === true ? 'border-green-500' : 
+                      emailValid === false ? 'border-carmine' : ''
+                    }`}
+                  />
+                  {emailValid !== null && (
+                    <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                      {emailValid ? (
+                        <CheckCircle className="w-5 h-5 text-green-500" />
+                      ) : (
+                        <AlertCircle className="w-5 h-5 text-carmine" />
+                      )}
+                    </div>
+                  )}
+                </div>
+                {emailValid === false && (
+                  <SmallText className="text-carmine mt-1">
+                    Please enter a valid email address
+                  </SmallText>
+                )}
               </div>
 
               {activeTab === 'signup' && (
                 <div>
                   <label className="block text-sm font-medium text-softwhite mb-2">
-                    Nickname
+                    Nickname *
                   </label>
                   <InputBox
                     value={nickname}
                     onChange={setNickname}
                     placeholder="Your display name"
                   />
+                  <SmallText className="text-ash mt-1">
+                    This is how others will see you (2-50 characters)
+                  </SmallText>
                 </div>
               )}
 
               <div>
                 <label className="block text-sm font-medium text-softwhite mb-2">
-                  Password
+                  Password *
                 </label>
                 <PasswordInput
                   value={password}
-                  onChange={setPassword}
-                  placeholder="••••••••"
+                  onChange={handlePasswordChange}
+                  placeholder={activeTab === 'signup' ? "Create a strong password" : "Enter your password"}
+                  className={passwordErrors.length > 0 ? 'border-carmine' : ''}
                 />
+                {activeTab === 'signup' && passwordErrors.length > 0 && (
+                  <div className="mt-2 space-y-1">
+                    {passwordErrors.map((error, index) => (
+                      <SmallText key={index} className="text-carmine flex items-center gap-2">
+                        <AlertCircle className="w-3 h-3 flex-shrink-0" />
+                        {error}
+                      </SmallText>
+                    ))}
+                  </div>
+                )}
+                {activeTab === 'signup' && password && passwordErrors.length === 0 && (
+                  <SmallText className="text-green-500 mt-1 flex items-center gap-2">
+                    <CheckCircle className="w-3 h-3" />
+                    Password meets all requirements
+                  </SmallText>
+                )}
               </div>
 
               {activeTab === 'signup' && (
                 <div>
                   <label className="block text-sm font-medium text-softwhite mb-2">
-                    Confirm password
+                    Confirm Password *
                   </label>
-                  <PasswordInput
-                    value={confirmPassword}
-                    onChange={setConfirmPassword}
-                    placeholder="••••••••"
-                  />
+                  <div className="relative">
+                    <PasswordInput
+                      value={confirmPassword}
+                      onChange={handleConfirmPasswordChange}
+                      placeholder="Confirm your password"
+                      className={`pr-10 ${
+                        passwordsMatch === true ? 'border-green-500' : 
+                        passwordsMatch === false ? 'border-carmine' : ''
+                      }`}
+                    />
+                    {passwordsMatch !== null && (
+                      <div className="absolute right-12 top-1/2 transform -translate-y-1/2">
+                        {passwordsMatch ? (
+                          <CheckCircle className="w-5 h-5 text-green-500" />
+                        ) : (
+                          <AlertCircle className="w-5 h-5 text-carmine" />
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  {passwordsMatch === false && (
+                    <SmallText className="text-carmine mt-1">
+                      Passwords do not match
+                    </SmallText>
+                  )}
                 </div>
               )}
 
@@ -515,21 +660,27 @@ export const LandingPage: React.FC = () => {
                   <CheckButton
                     checked={agreeToTerms}
                     onChange={setAgreeToTerms}
-                    label="I agree to the terms and conditions"
+                    label="I agree to the Terms & Conditions and Privacy Policy"
                   />
                 </div>
               )}
 
               <div className="pt-4">
-                <EmberButton className="w-full">
-                  {activeTab === 'signup' ? 'Join Embr' : 'Welcome back'}
+                <EmberButton 
+                  className="w-full" 
+                  disabled={loading || !email || !password || (activeTab === 'signup' && (!emailValid || passwordErrors.length > 0 || !passwordsMatch || !agreeToTerms))}
+                >
+                  {loading 
+                    ? (activeTab === 'signup' ? 'Creating Account...' : 'Signing In...') 
+                    : (activeTab === 'signup' ? 'Join Embr' : 'Welcome back')
+                  }
                 </EmberButton>
               </div>
 
               <SmallText className="text-center text-ash">
                 No spam. No ads. Your connections are yours alone.
               </SmallText>
-            </div>
+            </form>
           </BurningPaperCard>
         </div>
       </section>
