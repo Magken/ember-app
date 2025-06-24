@@ -23,7 +23,7 @@ import {
   type Friend,
   type FlameData
 } from '../lib/friends';
-import { getUserConversations, getUnreadCountForUserDirect, messagingSubscriptionManager } from '../lib/messaging';
+import { getUserConversations, getUnreadCountForUser, messagingSubscriptionManager } from '../lib/messaging';
 import { updateProfile, changePassword, signOut, deleteAccount } from '../lib/auth';
 import { calculateFlameStrength } from '../lib/flameStrength';
 
@@ -59,6 +59,11 @@ export const MainPage: React.FC = () => {
 
   // Unread messages state
   const [unreadCounts, setUnreadCounts] = useState<{ [userId: string]: number }>({});
+
+  // Real-time subscription cleanup functions
+  const [friendRequestsUnsubscribe, setFriendRequestsUnsubscribe] = useState<(() => void) | null>(null);
+  const [friendshipsUnsubscribe, setFriendshipsUnsubscribe] = useState<(() => void) | null>(null);
+  const [conversationsUnsubscribe, setConversationsUnsubscribe] = useState<(() => void) | null>(null);
 
   // Set nickname from profile when available
   useEffect(() => {
@@ -114,37 +119,12 @@ export const MainPage: React.FC = () => {
     return () => window.removeEventListener('resize', updateDimensions);
   }, []);
 
-  // 🔥 ENHANCED: Load unread message counts using the direct method
-  const loadUnreadCounts = async (friendsList: Friend[]) => {
+  // Load friends and friend requests
+  const loadFriendsData = useCallback(async () => {
     try {
-      console.log('🔥 Loading unread counts for', friendsList.length, 'friends');
-      const counts: { [userId: string]: number } = {};
-      
-      // Get unread count for each friend using the direct method
-      await Promise.all(
-        friendsList.map(async (friend) => {
-          const count = await getUnreadCountForUserDirect(friend.friend_id);
-          if (count > 0) {
-            counts[friend.friend_id] = count;
-            console.log(`🔥 Friend ${friend.friend_nickname} has ${count} unread messages`);
-          }
-        })
-      );
-      
-      setUnreadCounts(counts);
-      console.log('🔥 Final unread counts:', counts);
-    } catch (error) {
-      console.error('Error loading unread counts:', error);
-    }
-  };
+      setLoading(true);
+      setError(null);
 
-  // THE MAIN REFRESH FUNCTION - This is what the refresh button calls
-  const handleRefresh = useCallback(async () => {
-    console.log('🔄 REFRESH TRIGGERED - Loading all data with flame strength calculation');
-    setLoading(true);
-    setError(null);
-
-    try {
       // Load friends and friend requests in parallel
       const [friendsResult, requestsResult] = await Promise.all([
         getFriends(),
@@ -162,119 +142,220 @@ export const MainPage: React.FC = () => {
       const friendsData = friendsResult.data || [];
       const requestsData = requestsResult.data || [];
 
-      console.log('📊 Loaded friends:', friendsData.length, 'requests:', requestsData.length);
+      console.log('Loaded friends:', friendsData.length);
+      console.log('Loaded requests:', requestsData.length);
 
-      // Calculate actual flame strengths for each friend
-      const friendsWithCalculatedStrengths = await Promise.all(
-        friendsData.map(async (friend) => {
-          try {
-            const calculatedStrength = await calculateFlameStrength(friend.friend_id);
-            console.log(`🔥 Calculated strength for ${friend.friend_nickname}: ${calculatedStrength}`);
-            return {
-              ...friend,
-              connection_strength: calculatedStrength
-            };
-          } catch (err) {
-            console.error(`❌ Failed to calculate strength for ${friend.friend_id}:`, err);
-            return friend; // Keep original strength on error
-          }
-        })
-      );
-
-      setFriends(friendsWithCalculatedStrengths);
+      setFriends(friendsData);
       setFriendRequests(requestsData);
 
-      // Convert friends to flame data for hearth with calculated strengths
-      const flameData = convertFriendsToFlames(friendsWithCalculatedStrengths);
+      // Convert friends to flame data for hearth
+      const flameData = convertFriendsToFlames(friendsData);
       setUserConnections(flameData);
 
       // Load unread message counts for each friend
-      await loadUnreadCounts(friendsWithCalculatedStrengths);
-
-      console.log('✅ Refresh completed successfully');
+      await loadUnreadCounts(friendsData);
 
     } catch (err: any) {
-      console.error('❌ Error during refresh:', err);
-      setError(err.message || 'Failed to refresh data');
+      console.error('Error loading friends data:', err);
+      setError(err.message || 'Failed to load friends data');
     } finally {
       setLoading(false);
     }
   }, []);
 
+  // Load unread message counts for friends
+  const loadUnreadCounts = async (friendsList: Friend[]) => {
+    try {
+      const counts: { [userId: string]: number } = {};
+      
+      // Get unread count for each friend
+      await Promise.all(
+        friendsList.map(async (friend) => {
+          const count = await getUnreadCountForUser(friend.friend_id);
+          if (count > 0) {
+            counts[friend.friend_id] = count;
+          }
+        })
+      );
+      
+      setUnreadCounts(counts);
+    } catch (error) {
+      console.error('Error loading unread counts:', error);
+    }
+  };
+
+  // Recalculate flame strengths based on the formula
+  const recalculateFlameStrengths = useCallback(async () => {
+    try {
+      console.log('Recalculating flame strengths...');
+      
+      // Get the latest friends data
+      const { data: friendsData, error } = await getFriends();
+      
+      if (error || !friendsData) {
+        console.error('Failed to get friends for strength calculation:', error);
+        return;
+      }
+      
+      // For each friend, calculate the actual strength based on the formula
+      const updatedFriends = await Promise.all(
+        friendsData.map(async (friend) => {
+          try {
+            // Calculate strength using the formula
+            const strength = await calculateFlameStrength(friend.friend_id);
+            return {
+              ...friend,
+              connection_strength: strength
+            };
+          } catch (err) {
+            console.error(`Failed to calculate strength for ${friend.friend_id}:`, err);
+            return friend; // Keep original strength on error
+          }
+        })
+      );
+      
+      // Update friends with new strengths
+      setFriends(updatedFriends);
+      
+      // Convert to updated flame data
+      const updatedFlameData = convertFriendsToFlames(updatedFriends);
+      setUserConnections(updatedFlameData);
+      
+      console.log('Flame strengths recalculated successfully');
+    } catch (error) {
+      console.error('Error recalculating flame strengths:', error);
+    }
+  }, []);
+
+  // Set up real-time subscriptions for friend requests
+  useEffect(() => {
+    if (activeTab === 'friends') {
+      console.log('Setting up friend requests real-time subscription');
+      
+      const unsubscribe = friendsSubscriptionManager.subscribe('friend_requests', () => {
+        console.log('Friend requests updated via real-time subscription');
+        // Reload friend requests data
+        getFriendRequests().then(({ data, error }) => {
+          if (!error && data) {
+            setFriendRequests(data);
+          }
+        });
+      });
+      
+      setFriendRequestsUnsubscribe(() => unsubscribe);
+      
+      return () => {
+        console.log('Cleaning up friend requests subscription');
+        unsubscribe();
+        setFriendRequestsUnsubscribe(null);
+      };
+    }
+  }, [activeTab]);
+
+  // Set up real-time subscriptions for friendships
+  useEffect(() => {
+    console.log('Setting up friendships real-time subscription');
+    
+    const unsubscribe = friendsSubscriptionManager.subscribe('friendships', () => {
+      console.log('Friendships updated via real-time subscription');
+      // Reload friends data and recalculate flame strengths
+      loadFriendsData().then(() => {
+        recalculateFlameStrengths();
+      });
+    });
+    
+    setFriendshipsUnsubscribe(() => unsubscribe);
+    
+    return () => {
+      console.log('Cleaning up friendships subscription');
+      unsubscribe();
+      setFriendshipsUnsubscribe(null);
+    };
+  }, [loadFriendsData, recalculateFlameStrengths]);
+
+  // Set up real-time subscription for conversations (unread counts)
+  useEffect(() => {
+    if (!showChat) {
+      console.log('Setting up conversations real-time subscription');
+      
+      const unsubscribe = messagingSubscriptionManager.subscribeToConversations(() => {
+        console.log('Conversations updated via real-time subscription');
+        if (friends.length > 0) {
+          loadUnreadCounts(friends);
+        }
+      });
+
+      setConversationsUnsubscribe(() => unsubscribe);
+      
+      return () => {
+        console.log('Cleaning up conversations subscription');
+        unsubscribe();
+        setConversationsUnsubscribe(null);
+      };
+    }
+  }, [showChat, friends]);
+
   // Load data on component mount
   useEffect(() => {
-    console.log('🚀 Component mounted - loading initial data');
-    handleRefresh();
-  }, [handleRefresh]);
+    loadFriendsData();
+  }, [loadFriendsData]);
 
-  // 🔥 ENHANCED: Set up real-time subscriptions that trigger immediate refresh
-  useEffect(() => {
-    console.log('🔗 Setting up enhanced real-time subscriptions');
-    
-    // Friend requests subscription
-    const friendRequestsUnsubscribe = friendsSubscriptionManager.subscribe('friend_requests', () => {
-      console.log('📨 Friend requests updated - calling handleRefresh()');
-      handleRefresh();
-    });
-    
-    // Friendships subscription
-    const friendshipsUnsubscribe = friendsSubscriptionManager.subscribe('friendships', () => {
-      console.log('👥 Friendships updated - calling handleRefresh()');
-      handleRefresh();
-    });
-    
-    // Conversations subscription for unread counts
-    const conversationsUnsubscribe = messagingSubscriptionManager.subscribeToConversations(() => {
-      console.log('💬 Conversations updated - calling handleRefresh()');
-      handleRefresh();
-    });
-
-    // 🔥 NEW: Subscribe to ALL message changes for immediate unread count updates
-    const allMessagesUnsubscribe = messagingSubscriptionManager.subscribeToAllMessages(() => {
-      console.log('🔥 MESSAGE ACTIVITY DETECTED - calling handleRefresh()');
-      // Small delay to ensure database is updated
-      setTimeout(handleRefresh, 200);
-    });
-
-    // Cleanup function
-    return () => {
-      console.log('🧹 Cleaning up real-time subscriptions');
-      friendRequestsUnsubscribe();
-      friendshipsUnsubscribe();
-      conversationsUnsubscribe();
-      allMessagesUnsubscribe();
-    };
-  }, [handleRefresh]);
-
-  // Listen for custom refresh events - INCLUDING THE NEW MESSAGE EVENT
+  // Listen for custom refresh events
   useEffect(() => {
     const handleFriendRequestSent = () => {
-      console.log('📤 Friend request sent event - calling handleRefresh()');
-      handleRefresh();
+      console.log('Friend request sent event received, refreshing...');
+      if (activeTab === 'friends') {
+        loadFriendsData();
+      }
     };
 
     const handleFriendRequestResponded = () => {
-      console.log('📥 Friend request responded event - calling handleRefresh()');
-      handleRefresh();
-    };
-
-    const handleMessageWasSent = (event: any) => {
-      console.log('💌 Message was sent event - calling handleRefresh()');
-      console.log('Message details:', event.detail);
-      // Small delay to allow message to be processed
-      setTimeout(handleRefresh, 500);
+      console.log('Friend request responded event received, refreshing...');
+      if (activeTab === 'friends') {
+        loadFriendsData();
+      }
     };
 
     window.addEventListener('friendRequestSent', handleFriendRequestSent);
     window.addEventListener('friendRequestResponded', handleFriendRequestResponded);
-    window.addEventListener('messageWasSent', handleMessageWasSent);
 
     return () => {
       window.removeEventListener('friendRequestSent', handleFriendRequestSent);
       window.removeEventListener('friendRequestResponded', handleFriendRequestResponded);
-      window.removeEventListener('messageWasSent', handleMessageWasSent);
     };
-  }, [handleRefresh]);
+  }, [activeTab, loadFriendsData]);
+
+  // Listen for message sent events to update flame strengths
+  useEffect(() => {
+    const handleMessageSent = () => {
+      console.log('Message sent, updating flame strengths...');
+      // Delay to allow message to be processed
+      setTimeout(() => {
+        recalculateFlameStrengths();
+      }, 1000);
+    };
+
+    window.addEventListener('messageSent', handleMessageSent);
+
+    return () => {
+      window.removeEventListener('messageSent', handleMessageSent);
+    };
+  }, [recalculateFlameStrengths]);
+
+  // Cleanup all subscriptions on unmount
+  useEffect(() => {
+    return () => {
+      if (friendRequestsUnsubscribe) {
+        friendRequestsUnsubscribe();
+      }
+      if (friendshipsUnsubscribe) {
+        friendshipsUnsubscribe();
+      }
+      if (conversationsUnsubscribe) {
+        conversationsUnsubscribe();
+      }
+    };
+  }, [friendRequestsUnsubscribe, friendshipsUnsubscribe, conversationsUnsubscribe]);
 
   const handlePasswordChange = async () => {
     // Clear previous messages
@@ -478,9 +559,30 @@ export const MainPage: React.FC = () => {
   const handleCloseChat = () => {
     setShowChat(false);
     setSelectedContact(null);
-    // Refresh after closing chat to update unread counts and flame strengths
-    console.log('💬 Chat closed - calling handleRefresh()');
-    setTimeout(handleRefresh, 1000);
+    // Refresh unread counts when closing chat
+    if (friends.length > 0) {
+      loadUnreadCounts(friends);
+    }
+    // Update flame strengths after closing chat
+    setTimeout(() => {
+      recalculateFlameStrengths();
+    }, 1000);
+  };
+
+  // Enhanced refresh function that recalculates flame strengths
+  const handleRefresh = async () => {
+    console.log('Manual refresh triggered - recalculating flame strengths');
+    setLoading(true);
+    try {
+      // First load the basic data
+      await loadFriendsData();
+      // Then recalculate flame strengths with current data
+      await recalculateFlameStrengths();
+    } catch (error) {
+      console.error('Error during manual refresh:', error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const incomingRequests = friendRequests.filter(req => req.request_type === 'incoming' && req.status === 'pending');

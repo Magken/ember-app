@@ -193,79 +193,6 @@ class MessagingSubscriptionManager {
     };
   }
 
-  // 🔥 NEW: Subscribe to ALL messages table changes for unread count updates
-  subscribeToAllMessages(callback: () => void) {
-    const key = 'all_messages';
-    
-    // Add listener
-    if (!this.listeners[key]) {
-      this.listeners[key] = [];
-    }
-    this.listeners[key].push(callback);
-
-    // Create subscription if it doesn't exist
-    if (!this.subscriptions[key]) {
-      console.log('🔥 Creating real-time subscription for ALL messages (for unread counts)');
-      
-      this.subscriptions[key] = supabase
-        .channel('all_messages_changes')
-        .on(
-          'postgres_changes',
-          {
-            event: 'INSERT',
-            schema: 'public',
-            table: 'messages'
-          },
-          (payload) => {
-            console.log('🔥 NEW MESSAGE DETECTED - triggering unread count refresh:', payload);
-            this.listeners[key]?.forEach(listener => {
-              try {
-                listener(payload);
-              } catch (error) {
-                console.error('Error in all messages listener:', error);
-              }
-            });
-          }
-        )
-        .on(
-          'postgres_changes',
-          {
-            event: 'UPDATE',
-            schema: 'public',
-            table: 'message_status'
-          },
-          (payload) => {
-            console.log('🔥 MESSAGE STATUS UPDATED - triggering unread count refresh:', payload);
-            this.listeners[key]?.forEach(listener => {
-              try {
-                listener(payload);
-              } catch (error) {
-                console.error('Error in message status listener:', error);
-              }
-            });
-          }
-        )
-        .subscribe((status) => {
-          console.log('All messages subscription status:', status);
-        });
-    }
-
-    // Return unsubscribe function
-    return () => {
-      if (this.listeners[key]) {
-        this.listeners[key] = this.listeners[key].filter(l => l !== callback);
-        
-        // If no more listeners, remove subscription
-        if (this.listeners[key].length === 0) {
-          console.log('Removing all messages subscription');
-          this.subscriptions[key]?.unsubscribe();
-          delete this.subscriptions[key];
-          delete this.listeners[key];
-        }
-      }
-    };
-  }
-
   cleanup() {
     console.log('Cleaning up all messaging subscriptions');
     Object.values(this.subscriptions).forEach(subscription => {
@@ -486,29 +413,6 @@ export const uploadMediaFile = async (file: File): Promise<{ data: MediaFile | n
   }
 };
 
-// 🔥 NEW: Direct function to get unread count for a specific user (more efficient)
-export const getUnreadCountForUserDirect = async (userId: string): Promise<number> => {
-  try {
-    console.log('🔥 Getting unread count directly for user:', userId);
-    
-    const { data, error } = await supabase.rpc('get_unread_count_for_user', {
-      target_user_id: userId
-    });
-
-    if (error) {
-      console.error('Error getting unread count:', error);
-      return 0;
-    }
-
-    const count = data || 0;
-    console.log(`🔥 Unread count for ${userId}: ${count}`);
-    return count;
-  } catch (error) {
-    console.error('Error getting unread count for user:', error);
-    return 0;
-  }
-};
-
 // Helper function to check if user has unread messages
 export const hasUnreadMessages = async (): Promise<{ hasUnread: boolean; totalUnread: number }> => {
   try {
@@ -530,16 +434,9 @@ export const hasUnreadMessages = async (): Promise<{ hasUnread: boolean; totalUn
   }
 };
 
-// Helper function to get unread count for a specific user (fallback method)
+// Helper function to get unread count for a specific user
 export const getUnreadCountForUser = async (userId: string): Promise<number> => {
   try {
-    // Try the direct method first
-    const directCount = await getUnreadCountForUserDirect(userId);
-    if (directCount > 0) {
-      return directCount;
-    }
-
-    // Fallback to conversations method
     const { data: conversations } = await getUserConversations();
     
     if (!conversations) {
