@@ -1,11 +1,12 @@
 import React, { useState, useRef, useEffect, CSSProperties } from 'react';
-import { Send, Image, Mic, FileImage, X, Play, Pause, Volume2 } from 'lucide-react';
+import { Send, Image, Mic, FileImage, X, Play, Pause, Volume2, Video, Upload } from 'lucide-react';
 import { IconedButton } from './IconedButton';
+import { uploadMediaFile } from '../../lib/messaging';
 
 interface MediaFile {
   id: string;
   file: File;
-  type: 'image' | 'gif' | 'audio';
+  type: 'image' | 'gif' | 'audio' | 'video' | 'voice';
   url: string;
   name: string;
 }
@@ -37,10 +38,12 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
   const [playingAudio, setPlayingAudio] = useState<string | null>(null);
+  const [uploadingFiles, setUploadingFiles] = useState<Set<string>>(new Set());
   
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const audioInputRef = useRef<HTMLInputElement>(null);
+  const videoInputRef = useRef<HTMLInputElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const audioElementsRef = useRef<{ [key: string]: HTMLAudioElement }>({});
@@ -60,6 +63,12 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         audio.pause();
         audio.src = '';
       });
+      // Only revoke blob URLs that start with 'blob:'
+      mediaFiles.forEach(media => {
+        if (media.url.startsWith('blob:')) {
+          URL.revokeObjectURL(media.url);
+        }
+      });
     };
   }, []);
 
@@ -71,69 +80,165 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   };
 
   const handleSend = () => {
-    if ((value.trim() || mediaFiles.length > 0) && !disabled) {
+    if ((value.trim() || mediaFiles.length > 0) && !disabled && uploadingFiles.size === 0) {
       setBurst(true);
       onSend(value, mediaFiles.length > 0 ? mediaFiles : undefined);
       
-      // Clear media files after sending
-      mediaFiles.forEach(media => URL.revokeObjectURL(media.url));
+      // Clear media files after sending - but don't revoke URLs as they may be needed for display
       setMediaFiles([]);
       
       setTimeout(() => setBurst(false), 500);
     }
   };
 
-  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const validateFileSize = (file: File): boolean => {
+    const maxSize = 8 * 1024 * 1024; // 8MB limit
+    return file.size <= maxSize;
+  };
+
+  const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>, expectedType: 'image' | 'video') => {
     const files = Array.from(event.target.files || []);
     
-    files.forEach(file => {
-      // Check file type and size
-      const isImage = file.type.startsWith('image/');
-      const isGif = file.type === 'image/gif';
-      const maxSize = 10 * 1024 * 1024; // 10MB limit
-      
-      if (!isImage || file.size > maxSize) {
-        alert(`File "${file.name}" is either not an image or exceeds 10MB limit.`);
-        return;
+    for (const file of files) {
+      // Check file size
+      if (!validateFileSize(file)) {
+        alert(`File "${file.name}" exceeds 8MB limit.`);
+        continue;
       }
 
-      const mediaFile: MediaFile = {
-        id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
-        file,
-        type: isGif ? 'gif' : 'image',
-        url: URL.createObjectURL(file),
-        name: file.name
-      };
+      // Check file type
+      const isValidType = expectedType === 'image' 
+        ? file.type.startsWith('image/') 
+        : file.type.startsWith('video/');
+      
+      if (!isValidType) {
+        alert(`File "${file.name}" is not a valid ${expectedType} file.`);
+        continue;
+      }
 
-      setMediaFiles(prev => [...prev, mediaFile]);
-    });
+      const fileId = Date.now().toString() + Math.random().toString(36).substr(2, 9);
+      
+      // Add to uploading set
+      setUploadingFiles(prev => new Set(prev).add(fileId));
+
+      try {
+        // Upload file to storage
+        const { data: uploadedMedia, error } = await uploadMediaFile(file);
+        
+        if (error || !uploadedMedia) {
+          console.error('Upload failed, using blob URL:', error);
+          // Fallback to blob URL
+          const mediaFile: MediaFile = {
+            id: fileId,
+            file,
+            type: file.type === 'image/gif' ? 'gif' : expectedType,
+            url: URL.createObjectURL(file),
+            name: file.name
+          };
+          setMediaFiles(prev => [...prev, mediaFile]);
+        } else {
+          // Use uploaded file URL
+          const mediaFile: MediaFile = {
+            id: fileId,
+            file,
+            type: file.type === 'image/gif' ? 'gif' : expectedType,
+            url: uploadedMedia.file_url,
+            name: file.name
+          };
+          setMediaFiles(prev => [...prev, mediaFile]);
+        }
+      } catch (uploadError) {
+        console.error('Upload error, using blob URL:', uploadError);
+        // Fallback to blob URL
+        const mediaFile: MediaFile = {
+          id: fileId,
+          file,
+          type: file.type === 'image/gif' ? 'gif' : expectedType,
+          url: URL.createObjectURL(file),
+          name: file.name
+        };
+        setMediaFiles(prev => [...prev, mediaFile]);
+      } finally {
+        // Remove from uploading set
+        setUploadingFiles(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(fileId);
+          return newSet;
+        });
+      }
+    }
 
     // Reset input
     event.target.value = '';
   };
 
-  const handleAudioSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleAudioSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files || []);
     
-    files.forEach(file => {
+    for (const file of files) {
       const isAudio = file.type.startsWith('audio/');
-      const maxSize = 25 * 1024 * 1024; // 25MB limit for audio
       
-      if (!isAudio || file.size > maxSize) {
-        alert(`File "${file.name}" is either not an audio file or exceeds 25MB limit.`);
-        return;
+      if (!isAudio) {
+        alert(`File "${file.name}" is not an audio file.`);
+        continue;
       }
 
-      const mediaFile: MediaFile = {
-        id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
-        file,
-        type: 'audio',
-        url: URL.createObjectURL(file),
-        name: file.name
-      };
+      if (!validateFileSize(file)) {
+        alert(`File "${file.name}" exceeds 8MB limit.`);
+        continue;
+      }
 
-      setMediaFiles(prev => [...prev, mediaFile]);
-    });
+      const fileId = Date.now().toString() + Math.random().toString(36).substr(2, 9);
+      
+      // Add to uploading set
+      setUploadingFiles(prev => new Set(prev).add(fileId));
+
+      try {
+        // Upload file to storage
+        const { data: uploadedMedia, error } = await uploadMediaFile(file);
+        
+        if (error || !uploadedMedia) {
+          console.error('Upload failed, using blob URL:', error);
+          // Fallback to blob URL
+          const mediaFile: MediaFile = {
+            id: fileId,
+            file,
+            type: 'audio',
+            url: URL.createObjectURL(file),
+            name: file.name
+          };
+          setMediaFiles(prev => [...prev, mediaFile]);
+        } else {
+          // Use uploaded file URL
+          const mediaFile: MediaFile = {
+            id: fileId,
+            file,
+            type: 'audio',
+            url: uploadedMedia.file_url,
+            name: file.name
+          };
+          setMediaFiles(prev => [...prev, mediaFile]);
+        }
+      } catch (uploadError) {
+        console.error('Upload error, using blob URL:', uploadError);
+        // Fallback to blob URL
+        const mediaFile: MediaFile = {
+          id: fileId,
+          file,
+          type: 'audio',
+          url: URL.createObjectURL(file),
+          name: file.name
+        };
+        setMediaFiles(prev => [...prev, mediaFile]);
+      } finally {
+        // Remove from uploading set
+        setUploadingFiles(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(fileId);
+          return newSet;
+        });
+      }
+    }
 
     // Reset input
     event.target.value = '';
@@ -151,19 +256,36 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         }
       };
 
-      mediaRecorder.onstop = () => {
+      mediaRecorder.onstop = async () => {
         const blob = new Blob(chunks, { type: 'audio/webm' });
         const file = new File([blob], `recording-${Date.now()}.webm`, { type: 'audio/webm' });
         
-        const mediaFile: MediaFile = {
-          id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
-          file,
-          type: 'audio',
-          url: URL.createObjectURL(blob),
-          name: file.name
-        };
+        try {
+          // Try to upload the recording
+          const { data: uploadedMedia, error } = await uploadMediaFile(file);
+          
+          const mediaFile: MediaFile = {
+            id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+            file,
+            type: 'voice',
+            url: uploadedMedia?.file_url || URL.createObjectURL(blob),
+            name: file.name
+          };
 
-        setMediaFiles(prev => [...prev, mediaFile]);
+          setMediaFiles(prev => [...prev, mediaFile]);
+        } catch (error) {
+          console.error('Failed to upload recording, using blob URL:', error);
+          // Fallback to blob URL
+          const mediaFile: MediaFile = {
+            id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+            file,
+            type: 'voice',
+            url: URL.createObjectURL(blob),
+            name: file.name
+          };
+
+          setMediaFiles(prev => [...prev, mediaFile]);
+        }
         
         // Stop all tracks
         stream.getTracks().forEach(track => track.stop());
@@ -201,7 +323,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const removeMediaFile = (id: string) => {
     setMediaFiles(prev => {
       const fileToRemove = prev.find(f => f.id === id);
-      if (fileToRemove) {
+      if (fileToRemove && fileToRemove.url.startsWith('blob:')) {
         URL.revokeObjectURL(fileToRemove.url);
       }
       return prev.filter(f => f.id !== id);
@@ -235,11 +357,18 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       if (!audioElementsRef.current[mediaFile.id]) {
         const audio = new Audio(mediaFile.url);
         audio.onended = () => setPlayingAudio(null);
+        audio.onerror = (e) => {
+          console.error('Audio playback error for file:', mediaFile.name, e);
+          setPlayingAudio(null);
+        };
         audioElementsRef.current[mediaFile.id] = audio;
       }
 
       // Play audio
-      audioElementsRef.current[mediaFile.id].play();
+      audioElementsRef.current[mediaFile.id].play().catch(error => {
+        console.error('Audio play error for file:', mediaFile.name, error);
+        setPlayingAudio(null);
+      });
       setPlayingAudio(mediaFile.id);
     }
   };
@@ -308,6 +437,16 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         );
       })}
 
+      {/* Uploading Indicator */}
+      {uploadingFiles.size > 0 && (
+        <div className="p-3 bg-ember/20 rounded-soft border border-ember/50 flex items-center gap-3">
+          <div className="w-4 h-4 border-2 border-ember border-t-transparent rounded-full animate-spin"></div>
+          <span className="text-ember font-medium">
+            Uploading {uploadingFiles.size} file{uploadingFiles.size > 1 ? 's' : ''}...
+          </span>
+        </div>
+      )}
+
       {/* Media Preview Section */}
       {mediaFiles.length > 0 && (
         <div className="p-3 bg-navy/60 rounded-soft border border-ember/30">
@@ -321,6 +460,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                       src={media.url}
                       alt={media.name}
                       className="w-20 h-20 object-cover rounded border border-ember/30"
+                      onError={(e) => {
+                        console.error('Image load error for:', media.name);
+                        // Optionally show a placeholder or error state
+                      }}
                     />
                     {media.type === 'gif' && (
                       <div className="absolute top-1 left-1 bg-ember text-dark text-xs px-1 rounded">
@@ -336,8 +479,33 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                   </div>
                 )}
 
-                {/* Audio Preview */}
-                {media.type === 'audio' && (
+                {/* Video Preview */}
+                {media.type === 'video' && (
+                  <div className="relative">
+                    <video
+                      src={media.url}
+                      className="w-20 h-20 object-cover rounded border border-ember/30"
+                      muted
+                      preload="metadata"
+                      onError={(e) => {
+                        console.error('Video load error for:', media.name);
+                        // Optionally show a placeholder or error state
+                      }}
+                    />
+                    <div className="absolute top-1 left-1 bg-ember text-dark text-xs px-1 rounded">
+                      VIDEO
+                    </div>
+                    <button
+                      onClick={() => removeMediaFile(media.id)}
+                      className="absolute -top-2 -right-2 w-5 h-5 bg-carmine text-white rounded-full flex items-center justify-center hover:bg-carmine/80 transition-colors"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                )}
+
+                {/* Audio/Voice Preview */}
+                {(media.type === 'audio' || media.type === 'voice') && (
                   <div className="flex items-center gap-2 bg-deepblue/60 p-2 rounded border border-ember/30 min-w-[200px]">
                     <button
                       onClick={() => toggleAudioPlayback(media)}
@@ -350,7 +518,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                       )}
                     </button>
                     <div className="flex-1 min-w-0">
-                      <div className="text-xs text-softwhite truncate">{media.name}</div>
+                      <div className="text-xs text-softwhite truncate">
+                        {media.type === 'voice' ? 'Voice Recording' : media.name}
+                      </div>
                       <div className="text-xs text-ash">{formatFileSize(media.file.size)}</div>
                     </div>
                     <button
@@ -384,10 +554,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       {/* Main Text Input and Send Button Container */}
       <div className={`
         relative flex items-end gap-3 p-3 md:p-4 rounded-soft
-        bg-gradient-to-br from-navy/85 via-deepblue/75 to-navy/65
+        bg-gradient-to-br from-navy/95 via-deepblue/85 to-navy/75
         border-2 border-ember/40 backdrop-filter backdrop-blur-sm
         transition-all duration-300 w-full
-        ${focused ? 'border-ember/70 shadow-ember/30 bg-gradient-to-br from-navy/90 via-deepblue/80 to-navy/70' : 'hover:border-ember/50'}
+        ${focused ? 'border-ember/70 shadow-ember/30' : 'hover:border-ember/50'}
         
         before:content-[""] before:absolute before:inset-0 before:-z-10 before:rounded-soft
         before:transition-all before:duration-300
@@ -396,7 +566,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         before:blur-lg before:scale-105
       `}>
         
-        {/* Textarea - removed pulsing and fading effects */}
+        {/* Textarea - removed white film overlay, full opacity */}
         <div className="flex-1 relative min-w-0">
           <textarea
             ref={textareaRef}
@@ -410,11 +580,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({
             className={`
               w-full min-h-[40px] max-h-[100px] resize-none
               px-3 md:px-4 py-2 md:py-3 rounded-soft
-              bg-dark/50 text-softwhite placeholder:text-ash/60
+              bg-dark/90 text-softwhite placeholder:text-ash/60
               border border-ember/30 backdrop-filter backdrop-blur-sm
               transition-all duration-300
-              focus:outline-none focus:ring-1 focus:ring-ember/40 focus:border-ember/60 focus:bg-dark/70
-              hover:border-ember/50 hover:bg-dark/60
+              focus:outline-none focus:ring-1 focus:ring-ember/40 focus:border-ember/60 focus:bg-dark
+              hover:border-ember/50 hover:bg-dark/95
               scrollbar-hide
               ${disabled ? 'opacity-50 cursor-not-allowed' : ''}
             `}
@@ -425,13 +595,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
               lineHeight: '1.4'
             }}
           />
-          
-          {/* Subtle static glow effect when focused - no animation */}
-          {focused && (
-            <div className="absolute inset-0 rounded-soft pointer-events-none">
-              <div className="absolute inset-0 rounded-soft bg-gradient-to-r from-ember/3 via-carmine/2 to-ember/3" />
-            </div>
-          )}
         </div>
 
         {/* Send button */}
@@ -440,11 +603,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({
             icon={<Send className="w-4 h-4 md:w-5 md:h-5" />}
             label="Send Message"
             onClick={handleSend}
-            disabled={(!value.trim() && mediaFiles.length === 0) || disabled}
+            disabled={(!value.trim() && mediaFiles.length === 0) || disabled || uploadingFiles.size > 0}
             size="md"
             className={`
               transition-all duration-300
-              ${(!value.trim() && mediaFiles.length === 0) || disabled 
+              ${(!value.trim() && mediaFiles.length === 0) || disabled || uploadingFiles.size > 0
                 ? 'opacity-50 cursor-not-allowed' 
                 : 'hover:scale-105 active:scale-95'
               }
@@ -462,6 +625,16 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           size="sm"
           variant="ghost"
           onClick={() => fileInputRef.current?.click()}
+          disabled={disabled}
+        />
+        
+        {/* Video Button */}
+        <IconedButton
+          icon={<Video className="w-4 h-4" />}
+          label="Add Video"
+          size="sm"
+          variant="ghost"
+          onClick={() => videoInputRef.current?.click()}
           disabled={disabled}
         />
         
@@ -493,7 +666,16 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         type="file"
         accept="image/*"
         multiple
-        onChange={handleFileSelect}
+        onChange={(e) => handleFileSelect(e, 'image')}
+        className="hidden"
+      />
+      
+      <input
+        ref={videoInputRef}
+        type="file"
+        accept="video/*"
+        multiple
+        onChange={(e) => handleFileSelect(e, 'video')}
         className="hidden"
       />
       

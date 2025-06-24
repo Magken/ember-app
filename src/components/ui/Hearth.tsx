@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { Plus, Minus, Maximize2 } from 'lucide-react';
+import { Plus, Minus, Maximize2, RefreshCw, MessageCircle } from 'lucide-react';
 import { IconedButton } from './IconedButton';
 import { Flame } from './Flame';
 
@@ -9,7 +9,9 @@ interface FlameData {
   y: number; // Position as percentage (0-100)
   strength: number; // 0-1
   size?: number;
-  name?: string; // Added name property
+  name?: string;
+  hasUnreadMessages?: boolean; // New property for unread indicator
+  unreadCount?: number; // New property for unread count
 }
 
 interface HearthProps {
@@ -18,6 +20,8 @@ interface HearthProps {
   width?: number;
   height?: number;
   onFlameClick?: (flameId: string) => void;
+  onRefresh?: () => void;
+  showUnreadIndicators?: boolean; // New prop to control unread indicators
 }
 
 export const Hearth: React.FC<HearthProps> = ({
@@ -25,7 +29,9 @@ export const Hearth: React.FC<HearthProps> = ({
   className = '',
   width = 800,
   height = 600,
-  onFlameClick
+  onFlameClick,
+  onRefresh,
+  showUnreadIndicators = false
 }) => {
   const [zoom, setZoom] = useState(0.7); // Set initial zoom to 70%
   const [panX, setPanX] = useState(0);
@@ -82,21 +88,40 @@ export const Hearth: React.FC<HearthProps> = ({
   };
 
   const resetView = () => {
-    autoFitFlames();
+    if (flames.length > 0) {
+      autoFitFlames();
+    } else {
+      // Reset to default view when no flames
+      setZoom(0.7);
+      setPanX(0);
+      setPanY(0);
+    }
   };
 
-  // Mouse drag handlers for panning
+  const handleRefresh = () => {
+    if (onRefresh) {
+      onRefresh();
+    }
+  };
+
+  // Mouse drag handlers for panning - FIXED: Removed problematic event blocking
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    // Don't start dragging if clicking on a flame or control button
+    // Only start dragging if clicking directly on the hearth background
+    // Don't prevent events from reaching buttons or flames
     const target = e.target as HTMLElement;
-    if (target.closest('.flame-container') || target.closest('button')) {
+    
+    // Allow events to reach buttons and flames
+    if (target.closest('button') || target.closest('.flame-container')) {
       return;
     }
 
-    setIsDragging(true);
-    setDragStart({ x: e.clientX, y: e.clientY });
-    setPanStart({ x: panX, y: panY });
-    e.preventDefault();
+    // Only start dragging if clicking on the hearth background itself
+    if (target === hearthRef.current || target.closest('[data-hearth-background]')) {
+      setIsDragging(true);
+      setDragStart({ x: e.clientX, y: e.clientY });
+      setPanStart({ x: panX, y: panY });
+      e.preventDefault();
+    }
   }, [panX, panY]);
 
   const handleMouseMove = useCallback((e: MouseEvent) => {
@@ -117,6 +142,13 @@ export const Hearth: React.FC<HearthProps> = ({
   // Touch handlers for mobile panning
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
     if (e.touches.length === 1) {
+      const target = e.target as HTMLElement;
+      
+      // Allow events to reach buttons and flames
+      if (target.closest('button') || target.closest('.flame-container')) {
+        return;
+      }
+
       const touch = e.touches[0];
       setIsDragging(true);
       setDragStart({ x: touch.clientX, y: touch.clientY });
@@ -172,7 +204,7 @@ export const Hearth: React.FC<HearthProps> = ({
 
   return (
     <div 
-      className={`relative bg-transparent overflow-hidden select-none ${className}`}
+      className={`relative bg-black overflow-hidden select-none ${className}`}
       style={{ 
         width, 
         height,
@@ -181,8 +213,8 @@ export const Hearth: React.FC<HearthProps> = ({
       onMouseDown={handleMouseDown}
       onTouchStart={handleTouchStart}
     >
-      {/* Control Buttons */}
-      <div className="absolute top-4 right-4 z-20 flex gap-2">
+      {/* Control Buttons - Always enabled and clickable */}
+      <div className="absolute top-4 right-4 z-50 flex gap-2 pointer-events-auto">
         <IconedButton
           icon={<Plus className="w-4 h-4" />}
           label="Zoom In"
@@ -197,8 +229,8 @@ export const Hearth: React.FC<HearthProps> = ({
         />
       </div>
 
-      {/* Fit All Button */}
-      <div className="absolute top-4 left-4 z-20">
+      {/* Fit All Button - Always enabled and clickable */}
+      <div className="absolute top-4 left-4 z-50 pointer-events-auto">
         <IconedButton
           icon={<Maximize2 className="w-4 h-4" />}
           label="Fit All"
@@ -207,30 +239,42 @@ export const Hearth: React.FC<HearthProps> = ({
         />
       </div>
 
+      {/* Refresh Button - Below Fit All - Always enabled and clickable */}
+      <div className="absolute top-16 left-4 z-50 pointer-events-auto">
+        <IconedButton
+          icon={<RefreshCw className="w-4 h-4" />}
+          label="Refresh"
+          size="sm"
+          onClick={handleRefresh}
+        />
+      </div>
+
       {/* Zoom Level Indicator */}
-      <div className="absolute bottom-4 right-4 z-20 px-2 py-1 bg-navy/80 text-softwhite text-xs rounded border border-ember/30">
+      <div className="absolute bottom-4 right-4 z-20 px-2 py-1 bg-navy/80 text-softwhite text-xs rounded border border-ember/30 pointer-events-none">
         {Math.round(zoom * 100)}%
       </div>
 
       {/* Pan Instructions */}
-      <div className="absolute bottom-4 left-4 z-20 px-2 py-1 bg-navy/80 text-ash text-xs rounded border border-ember/30">
+      <div className="absolute bottom-4 left-4 z-20 px-2 py-1 bg-navy/80 text-ash text-xs rounded border border-ember/30 pointer-events-none">
         Drag to pan
       </div>
 
-      {/* Hearth Canvas */}
+      {/* Hearth Canvas with Pure Black Background */}
       <div
         ref={hearthRef}
-        className="absolute inset-0 transition-transform duration-200 ease-out"
+        data-hearth-background="true"
+        className="absolute inset-0 transition-transform duration-200 ease-out bg-black"
         style={{
           transform: `scale(${zoom}) translate(${panX}px, ${panY}px)`,
           transformOrigin: 'center center',
           transitionProperty: isDragging ? 'none' : 'transform'
         }}
       >
-        {/* Background texture/pattern for the hearth */}
-        <div className="absolute inset-0 opacity-10">
+        {/* Background texture/pattern for the hearth - subtle on black */}
+        <div className="absolute inset-0 opacity-5 pointer-events-none" data-hearth-background="true">
           <div 
             className="w-full h-full"
+            data-hearth-background="true"
             style={{
               backgroundImage: `
                 radial-gradient(circle at 25% 25%, rgba(139,69,19,0.3) 0%, transparent 50%),
@@ -249,7 +293,7 @@ export const Hearth: React.FC<HearthProps> = ({
           return (
             <div
               key={flame.id}
-              className="absolute transition-all duration-500 flame-container"
+              className="absolute transition-all duration-500 flame-container pointer-events-auto"
               style={{
                 left: `${flame.x}%`,
                 top: `${flame.y}%`,
@@ -273,28 +317,41 @@ export const Hearth: React.FC<HearthProps> = ({
               {/* Flame name positioned outside the flame's brightest regions with increased distance */}
               {flame.name && (
                 <div 
-                  className={`absolute left-1/2 transform -translate-x-1/2 text-xs font-medium text-center whitespace-nowrap ${getFlameColor(flame.strength)}`}
+                  className={`absolute left-1/2 transform -translate-x-1/2 text-xs font-medium text-center whitespace-nowrap ${getFlameColor(flame.strength)} pointer-events-none flex items-center gap-2`}
                   style={{
                     top: `${flameSize * 1.6}px`, // Increased distance from flame
                     textShadow: flame.strength < 0.3 
                       ? '0 0 4px rgba(150,0,24,0.8)' 
                       : flame.strength < 0.7 
                         ? '0 0 4px rgba(255,191,0,0.6)' 
-                        : '0 0 4px rgba(243,243,243,0.6)',
-                    pointerEvents: 'none' // Prevent interference with flame clicks
+                        : '0 0 4px rgba(243,243,243,0.6)'
                   }}
                 >
-                  {flame.name}
+                  <span>{flame.name}</span>
+                  
+                  {/* Unread Message Indicator - positioned to the right of the name */}
+                  {showUnreadIndicators && flame.hasUnreadMessages && (
+                    <div className="relative">
+                      {/* Green dot indicator */}
+                      <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+                      
+                      {/* Unread count badge */}
+                      {flame.unreadCount && flame.unreadCount > 0 && (
+                        <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 text-dark text-xs font-bold rounded-full flex items-center justify-center" style={{ fontSize: '8px' }}>
+                          {flame.unreadCount > 9 ? '9+' : flame.unreadCount}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
               
               {/* Dying flame indicator - positioned below name with increased distance */}
               {flame.strength < 0.3 && (
                 <div 
-                  className="absolute left-1/2 transform -translate-x-1/2 text-xs text-carmine font-medium animate-pulse"
+                  className="absolute left-1/2 transform -translate-x-1/2 text-xs text-carmine font-medium animate-pulse pointer-events-none"
                   style={{
-                    top: `${flameSize * 1.6 + 24}px`, // Below the name with more space
-                    pointerEvents: 'none'
+                    top: `${flameSize * 1.6 + 24}px` // Below the name with more space
                   }}
                 >
                   Dying
@@ -303,17 +360,6 @@ export const Hearth: React.FC<HearthProps> = ({
             </div>
           );
         })}
-
-        {/* Empty hearth message */}
-        {flames.length === 0 && (
-          <div className="absolute inset-0 flex items-center justify-center">
-            <div className="text-center text-ash">
-              <div className="text-2xl mb-2">🔥</div>
-              <div className="text-sm">Empty Hearth</div>
-              <div className="text-xs opacity-60">Add flames to bring it to life</div>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );

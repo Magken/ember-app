@@ -7,12 +7,79 @@ if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error('Missing Supabase environment variables');
 }
 
+// Create a unique session ID for this tab/window
+const sessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+console.log('Creating Supabase client with session ID:', sessionId);
+
+// Custom storage adapter that uses sessionStorage with unique keys per tab
+const createTabUniqueStorage = () => {
+  const keyPrefix = `supabase_${sessionId}_`;
+  
+  return {
+    getItem: (key: string) => {
+      try {
+        // First try sessionStorage (tab-specific)
+        const sessionValue = sessionStorage.getItem(keyPrefix + key);
+        if (sessionValue) {
+          console.log(`Retrieved from sessionStorage: ${key}`);
+          return sessionValue;
+        }
+        
+        // Fallback to localStorage for initial session (but don't use it for ongoing storage)
+        const localValue = localStorage.getItem(key);
+        if (localValue) {
+          console.log(`Retrieved from localStorage (fallback): ${key}`);
+          // Immediately copy to sessionStorage and remove from localStorage
+          sessionStorage.setItem(keyPrefix + key, localValue);
+          localStorage.removeItem(key);
+          return localValue;
+        }
+        
+        return null;
+      } catch (error) {
+        console.warn('Storage getItem error:', error);
+        return null;
+      }
+    },
+    
+    setItem: (key: string, value: string) => {
+      try {
+        // Always store in sessionStorage with unique prefix
+        sessionStorage.setItem(keyPrefix + key, value);
+        console.log(`Stored in sessionStorage: ${key}`);
+        
+        // Remove from localStorage to prevent conflicts
+        try {
+          localStorage.removeItem(key);
+        } catch (e) {
+          // Ignore localStorage removal errors
+        }
+      } catch (error) {
+        console.warn('Storage setItem error:', error);
+      }
+    },
+    
+    removeItem: (key: string) => {
+      try {
+        // Remove from both storages
+        sessionStorage.removeItem(keyPrefix + key);
+        localStorage.removeItem(key);
+        console.log(`Removed from storage: ${key}`);
+      } catch (error) {
+        console.warn('Storage removeItem error:', error);
+      }
+    }
+  };
+};
+
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: true,
-    flowType: 'pkce'
+    flowType: 'pkce',
+    // Use our custom tab-unique storage
+    storage: createTabUniqueStorage()
   }
 });
 
@@ -73,3 +140,6 @@ export interface UserSession {
   last_activity_at: string;
   created_at: string;
 }
+
+// Export session ID for debugging
+export { sessionId };

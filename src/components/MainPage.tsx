@@ -6,97 +6,85 @@ import { PasswordInput } from './ui/PasswordInput';
 import { EmberButton } from './ui/Button';
 import { Flame } from './ui/Flame';
 import { Hearth } from './ui/Hearth';
-import { ChatBox } from './ui/ChatBox';
+import { LiveChatBox } from './ui/LiveChatBox';
 import { Heading2, Heading3, TextBlock, SmallText, TinyText } from './ui/Typography';
-import { Settings, User, UserPlus, X, Clock, CheckCircle, XCircle, Copy, LogOut, Trash2 } from 'lucide-react';
+import { Settings, User, UserPlus, X, Clock, CheckCircle, XCircle, Copy, LogOut, Trash2, RefreshCw, AlertCircle, MessageCircle } from 'lucide-react';
+import { useAuth } from './auth/AuthProvider';
+import { 
+  sendFriendRequest, 
+  respondToFriendRequest, 
+  getFriendRequests, 
+  getFriends, 
+  convertFriendsToFlames,
+  formatTimeAgo,
+  validateUniqueCode,
+  type FriendRequest,
+  type Friend,
+  type FlameData
+} from '../lib/friends';
+import { getUserConversations, getUnreadCountForUser, messagingSubscriptionManager } from '../lib/messaging';
+import { updateProfile, changePassword, signOut, deleteAccount } from '../lib/auth';
 
-interface FriendRequest {
-  id: string;
-  username: string;
-  type: 'incoming' | 'outgoing';
-  timestamp: Date;
-  status: 'pending' | 'accepted' | 'declined';
-}
-
-interface FlameData {
-  id: string;
-  x: number;
-  y: number;
-  strength: number;
-  size?: number;
-  name?: string;
-}
-
-interface Message {
-  id: string;
-  text: string;
-  sender: 'user' | 'other';
-  timestamp: Date;
-  senderName: string;
-  seen?: boolean;
+interface ValidationMessage {
+  type: 'success' | 'error';
+  message: string;
 }
 
 export const MainPage: React.FC = () => {
+  const { user, profile, refreshProfile } = useAuth();
   const [showSettings, setShowSettings] = useState(false);
   const [showChat, setShowChat] = useState(false);
   const [selectedContact, setSelectedContact] = useState<FlameData | null>(null);
   const [activeTab, setActiveTab] = useState<'profile' | 'friends'>('profile');
-  const [nickname, setNickname] = useState('Alex');
+  const [nickname, setNickname] = useState('');
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [friendUsername, setFriendUsername] = useState('');
   const [hearthDimensions, setHearthDimensions] = useState({ width: 800, height: 600 });
+  const [copySuccess, setCopySuccess] = useState(false);
 
-  // User's unique code for friend connections
-  const [uniqueCode] = useState('EMBR-' + Math.random().toString(36).substr(2, 8).toUpperCase());
+  // Validation messages for both tabs
+  const [profileMessage, setProfileMessage] = useState<ValidationMessage | null>(null);
+  const [friendsMessage, setFriendsMessage] = useState<ValidationMessage | null>(null);
 
-  // Sample friend requests data
-  const [friendRequests, setFriendRequests] = useState<FriendRequest[]>([
-    {
-      id: '1',
-      username: 'sarah_m',
-      type: 'incoming',
-      timestamp: new Date(Date.now() - 1000 * 60 * 30),
-      status: 'pending'
-    },
-    {
-      id: '2',
-      username: 'mike_dev',
-      type: 'incoming',
-      timestamp: new Date(Date.now() - 1000 * 60 * 60 * 2),
-      status: 'pending'
-    },
-    {
-      id: '3',
-      username: 'emma_artist',
-      type: 'outgoing',
-      timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24),
-      status: 'pending'
-    },
-    {
-      id: '4',
-      username: 'david_music',
-      type: 'outgoing',
-      timestamp: new Date(Date.now() - 1000 * 60 * 60 * 48),
-      status: 'pending'
+  // Friends state
+  const [friendRequests, setFriendRequests] = useState<FriendRequest[]>([]);
+  const [friends, setFriends] = useState<Friend[]>([]);
+  const [userConnections, setUserConnections] = useState<FlameData[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Unread messages state
+  const [unreadCounts, setUnreadCounts] = useState<{ [userId: string]: number }>({});
+
+  // Set nickname from profile when available
+  useEffect(() => {
+    if (profile?.nickname) {
+      setNickname(profile.nickname);
     }
-  ]);
+  }, [profile]);
 
-  // Sample user connections with increased spacing
-  const [userConnections] = useState<FlameData[]>([
-    { id: '1', x: 20, y: 25, strength: 0.9, size: 70, name: 'Sarah' },
-    { id: '2', x: 60, y: 20, strength: 0.7, size: 60, name: 'Mike' },
-    { id: '3', x: 85, y: 45, strength: 0.5, size: 50, name: 'Emma' },
-    { id: '4', x: 15, y: 70, strength: 0.2, size: 40, name: 'Tom' },
-    { id: '5', x: 45, y: 75, strength: 0.8, size: 65, name: 'Lisa' },
-    { id: '6', x: 75, y: 65, strength: 0.3, size: 45, name: 'David' },
-    { id: '7', x: 35, y: 40, strength: 0.6, size: 55, name: 'Anna' },
-    { id: '8', x: 90, y: 80, strength: 0.15, size: 35, name: 'Jake' },
-  ]);
+  // Clear messages when switching tabs
+  useEffect(() => {
+    setProfileMessage(null);
+    setFriendsMessage(null);
+  }, [activeTab]);
 
-  // Sample user data
-  const userNickname = nickname || 'Alex';
+  // Auto-clear messages after 5 seconds
+  useEffect(() => {
+    if (profileMessage) {
+      const timer = setTimeout(() => setProfileMessage(null), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [profileMessage]);
+
+  useEffect(() => {
+    if (friendsMessage) {
+      const timer = setTimeout(() => setFriendsMessage(null), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [friendsMessage]);
 
   // Update hearth dimensions based on window size with reduced minimum sizes (20% smaller)
   useEffect(() => {
@@ -124,99 +112,299 @@ export const MainPage: React.FC = () => {
     return () => window.removeEventListener('resize', updateDimensions);
   }, []);
 
-  const handlePasswordChange = () => {
+  // Load friends and friend requests
+  const loadFriendsData = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      // Load friends and friend requests in parallel
+      const [friendsResult, requestsResult] = await Promise.all([
+        getFriends(),
+        getFriendRequests()
+      ]);
+
+      if (friendsResult.error) {
+        throw new Error(friendsResult.error.message || 'Failed to load friends');
+      }
+
+      if (requestsResult.error) {
+        throw new Error(requestsResult.error.message || 'Failed to load friend requests');
+      }
+
+      const friendsData = friendsResult.data || [];
+      const requestsData = requestsResult.data || [];
+
+      console.log('Loaded friends:', friendsData.length);
+      console.log('Loaded requests:', requestsData.length);
+
+      setFriends(friendsData);
+      setFriendRequests(requestsData);
+
+      // Convert friends to flame data for hearth
+      const flameData = convertFriendsToFlames(friendsData);
+      setUserConnections(flameData);
+
+      // Load unread message counts for each friend
+      await loadUnreadCounts(friendsData);
+
+    } catch (err: any) {
+      console.error('Error loading friends data:', err);
+      setError(err.message || 'Failed to load friends data');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Load unread message counts for friends
+  const loadUnreadCounts = async (friendsList: Friend[]) => {
+    try {
+      const counts: { [userId: string]: number } = {};
+      
+      // Get unread count for each friend
+      await Promise.all(
+        friendsList.map(async (friend) => {
+          const count = await getUnreadCountForUser(friend.friend_id);
+          if (count > 0) {
+            counts[friend.friend_id] = count;
+          }
+        })
+      );
+      
+      setUnreadCounts(counts);
+    } catch (error) {
+      console.error('Error loading unread counts:', error);
+    }
+  };
+
+  // Set up real-time subscription for conversations
+  useEffect(() => {
+    const unsubscribe = messagingSubscriptionManager.subscribeToConversations(() => {
+      console.log('Conversations updated, refreshing unread counts...');
+      if (friends.length > 0) {
+        loadUnreadCounts(friends);
+      }
+    });
+
+    return unsubscribe;
+  }, [friends]);
+
+  // Load data on component mount
+  useEffect(() => {
+    loadFriendsData();
+  }, []);
+
+  // Listen for custom refresh events
+  useEffect(() => {
+    const handleFriendRequestSent = () => {
+      console.log('Friend request sent event received, refreshing...');
+      if (activeTab === 'friends') {
+        loadFriendsData();
+      }
+    };
+
+    const handleFriendRequestResponded = () => {
+      console.log('Friend request responded event received, refreshing...');
+      if (activeTab === 'friends') {
+        loadFriendsData();
+      }
+    };
+
+    window.addEventListener('friendRequestSent', handleFriendRequestSent);
+    window.addEventListener('friendRequestResponded', handleFriendRequestResponded);
+
+    return () => {
+      window.removeEventListener('friendRequestSent', handleFriendRequestSent);
+      window.removeEventListener('friendRequestResponded', handleFriendRequestResponded);
+    };
+  }, [activeTab]);
+
+  const handlePasswordChange = async () => {
+    // Clear previous messages
+    setProfileMessage(null);
+
     if (!currentPassword || !newPassword || !confirmPassword) {
-      alert('Please fill in all password fields');
+      setProfileMessage({ type: 'error', message: 'Please fill in all password fields' });
       return;
     }
     if (newPassword !== confirmPassword) {
-      alert('New passwords do not match');
+      setProfileMessage({ type: 'error', message: 'New passwords do not match' });
       return;
     }
-    if (newPassword.length < 6) {
-      alert('Password must be at least 6 characters long');
+    if (newPassword.length < 8) {
+      setProfileMessage({ type: 'error', message: 'Password must be at least 8 characters long' });
       return;
     }
     
-    // Simulate password change
-    alert('Password changed successfully!');
-    setCurrentPassword('');
-    setNewPassword('');
-    setConfirmPassword('');
+    try {
+      const { error } = await changePassword(currentPassword, newPassword);
+      if (error) {
+        throw error;
+      }
+      
+      setProfileMessage({ type: 'success', message: 'Password changed successfully!' });
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+    } catch (error: any) {
+      setProfileMessage({ type: 'error', message: error.message || 'Failed to change password' });
+    }
   };
 
-  const handleAddFriend = () => {
+  const handleAddFriend = async () => {
+    // Clear previous messages
+    setFriendsMessage(null);
+
     if (!friendUsername.trim()) {
-      alert('Please enter a username or unique code');
+      setFriendsMessage({ type: 'error', message: 'Please enter a username or unique code' });
       return;
     }
     
-    // Add new outgoing friend request
-    const newRequest: FriendRequest = {
-      id: Date.now().toString(),
-      username: friendUsername.trim(),
-      type: 'outgoing',
-      timestamp: new Date(),
-      status: 'pending'
-    };
-    
-    setFriendRequests(prev => [newRequest, ...prev]);
-    alert(`Friend request sent to ${friendUsername}!`);
-    setFriendUsername('');
+    // Validate unique code format
+    if (!validateUniqueCode(friendUsername.trim())) {
+      setFriendsMessage({ type: 'error', message: 'Please enter a valid unique code (format: EMBR-XXXXXXXX)' });
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      const { data, error } = await sendFriendRequest(friendUsername.trim());
+      
+      if (error) {
+        throw error;
+      }
+
+      if (data?.success) {
+        setFriendsMessage({ type: 'success', message: `Friend request sent to ${friendUsername}!` });
+        setFriendUsername('');
+        // The custom event will trigger refresh automatically
+      } else {
+        throw new Error(data?.error || 'Failed to send friend request');
+      }
+    } catch (error: any) {
+      console.error('Add friend error:', error);
+      setFriendsMessage({ type: 'error', message: error.message || 'Failed to send friend request' });
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleSaveProfile = () => {
+  const handleSaveProfile = async () => {
+    // Clear previous messages
+    setProfileMessage(null);
+
     if (!nickname.trim()) {
-      alert('Nickname cannot be empty');
+      setProfileMessage({ type: 'error', message: 'Nickname cannot be empty' });
       return;
     }
     
-    // Simulate saving profile
-    alert('Profile updated successfully!');
+    try {
+      const { error } = await updateProfile({ nickname: nickname.trim() });
+      if (error) {
+        throw error;
+      }
+      
+      // Refresh the profile to get updated data
+      await refreshProfile();
+      
+      setProfileMessage({ type: 'success', message: 'Profile updated successfully!' });
+    } catch (error: any) {
+      setProfileMessage({ type: 'error', message: error.message || 'Failed to update profile' });
+    }
   };
 
-  const handleAcceptRequest = (requestId: string) => {
-    setFriendRequests(prev => prev.map(req => 
-      req.id === requestId ? { ...req, status: 'accepted' } : req
-    ));
-    
-    // Remove accepted request after a short delay
-    setTimeout(() => {
-      setFriendRequests(prev => prev.filter(req => req.id !== requestId));
-    }, 1500);
+  const handleAcceptRequest = async (requestId: string) => {
+    setLoading(true);
+    setFriendsMessage(null);
+
+    try {
+      const { data, error } = await respondToFriendRequest(requestId, 'accepted');
+      
+      if (error) {
+        throw error;
+      }
+
+      if (data?.success) {
+        setFriendsMessage({ type: 'success', message: 'Friend request accepted successfully!' });
+        // The custom event will trigger refresh automatically
+        console.log('Friend request accepted successfully');
+      } else {
+        throw new Error(data?.error || 'Failed to accept friend request');
+      }
+    } catch (error: any) {
+      console.error('Accept request error:', error);
+      setFriendsMessage({ type: 'error', message: error.message || 'Failed to accept friend request' });
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleDeclineRequest = (requestId: string) => {
-    setFriendRequests(prev => prev.map(req => 
-      req.id === requestId ? { ...req, status: 'declined' } : req
-    ));
-    
-    // Remove declined request after a short delay
-    setTimeout(() => {
-      setFriendRequests(prev => prev.filter(req => req.id !== requestId));
-    }, 1500);
+  const handleDeclineRequest = async (requestId: string) => {
+    setLoading(true);
+    setFriendsMessage(null);
+
+    try {
+      const { data, error } = await respondToFriendRequest(requestId, 'declined');
+      
+      if (error) {
+        throw error;
+      }
+
+      if (data?.success) {
+        setFriendsMessage({ type: 'success', message: 'Friend request declined successfully' });
+        // The custom event will trigger refresh automatically
+        console.log('Friend request declined successfully');
+      } else {
+        throw new Error(data?.error || 'Failed to decline friend request');
+      }
+    } catch (error: any) {
+      console.error('Decline request error:', error);
+      setFriendsMessage({ type: 'error', message: error.message || 'Failed to decline friend request' });
+    } finally {
+      setLoading(false);
+    }
   };
 
   const copyUniqueCode = () => {
-    navigator.clipboard.writeText(uniqueCode).then(() => {
-      alert('Unique code copied to clipboard!');
+    const codeToShare = profile?.unique_code || 'EMBR-XXXXXXXX';
+    navigator.clipboard.writeText(codeToShare).then(() => {
+      setCopySuccess(true);
+      setProfileMessage({ type: 'success', message: 'Unique code copied to clipboard!' });
+      setTimeout(() => setCopySuccess(false), 3000);
     }).catch(() => {
-      alert('Failed to copy code. Please copy manually: ' + uniqueCode);
+      setProfileMessage({ type: 'error', message: 'Failed to copy code. Please copy manually: ' + codeToShare });
     });
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    setProfileMessage(null);
+
     if (confirm('Are you sure you want to log out?')) {
-      alert('Logged out successfully!');
-      // Here you would typically redirect to login page
+      try {
+        await signOut();
+        setProfileMessage({ type: 'success', message: 'Logged out successfully!' });
+      } catch (error: any) {
+        console.error('Logout error:', error);
+        setProfileMessage({ type: 'error', message: 'Logout failed, forcing reload...' });
+        // Force reload as fallback
+        setTimeout(() => window.location.reload(), 1000);
+      }
     }
   };
 
-  const handleDeleteAccount = () => {
+  const handleDeleteAccount = async () => {
+    setProfileMessage(null);
+
     if (confirm('Are you sure you want to delete your account? This action cannot be undone.')) {
       if (confirm('This will permanently delete all your data and connections. Are you absolutely sure?')) {
-        alert('Account deletion initiated. You will receive a confirmation email.');
-        // Here you would typically handle account deletion
+        try {
+          await deleteAccount();
+          setProfileMessage({ type: 'success', message: 'Account deletion initiated.' });
+        } catch (error: any) {
+          setProfileMessage({ type: 'error', message: error.message || 'Failed to delete account' });
+        }
       }
     }
   };
@@ -233,55 +421,24 @@ export const MainPage: React.FC = () => {
   const handleCloseChat = () => {
     setShowChat(false);
     setSelectedContact(null);
+    // Refresh unread counts when closing chat
+    if (friends.length > 0) {
+      loadUnreadCounts(friends);
+    }
   };
 
-  const formatTimeAgo = (date: Date) => {
-    const now = new Date();
-    const diffInMinutes = Math.floor((now.getTime() - date.getTime()) / (1000 * 60));
-    
-    if (diffInMinutes < 1) return 'Just now';
-    if (diffInMinutes < 60) return `${diffInMinutes}m ago`;
-    
-    const diffInHours = Math.floor(diffInMinutes / 60);
-    if (diffInHours < 24) return `${diffInHours}h ago`;
-    
-    const diffInDays = Math.floor(diffInHours / 24);
-    return `${diffInDays}d ago`;
-  };
+  const incomingRequests = friendRequests.filter(req => req.request_type === 'incoming' && req.status === 'pending');
+  const outgoingRequests = friendRequests.filter(req => req.request_type === 'outgoing' && req.status === 'pending');
 
-  // Generate sample messages for the selected contact
-  const generateSampleMessages = (contactName: string): Message[] => {
-    const messages: Message[] = [
-      {
-        id: '3',
-        text: `Hey! How have you been? It's been a while since we last talked.`,
-        sender: 'other',
-        timestamp: new Date(Date.now() - 1000 * 60 * 30),
-        senderName: contactName,
-        seen: true
-      },
-      {
-        id: '2',
-        text: `I've been good! Just busy with work. How about you?`,
-        sender: 'user',
-        timestamp: new Date(Date.now() - 1000 * 60 * 25),
-        senderName: 'You',
-        seen: true
-      },
-      {
-        id: '1',
-        text: `Same here! Our ember has been glowing nicely lately 🔥`,
-        sender: 'other',
-        timestamp: new Date(Date.now() - 1000 * 60 * 10),
-        senderName: contactName,
-        seen: true
-      }
-    ];
-    return messages;
-  };
+  // User's nickname from profile or fallback
+  const userNickname = profile?.nickname || nickname || 'User';
 
-  const incomingRequests = friendRequests.filter(req => req.type === 'incoming' && req.status === 'pending');
-  const outgoingRequests = friendRequests.filter(req => req.type === 'outgoing' && req.status === 'pending');
+  // Enhanced user connections with unread indicators
+  const enhancedUserConnections = userConnections.map(connection => ({
+    ...connection,
+    hasUnreadMessages: (unreadCounts[connection.id] || 0) > 0,
+    unreadCount: unreadCounts[connection.id] || 0
+  }));
 
   return (
     <div className="min-h-screen bg-black text-white relative">
@@ -316,22 +473,37 @@ export const MainPage: React.FC = () => {
         {/* Main Content - Hearth Display or Chat */}
         <main className="pt-20 min-h-screen">
           {showChat && selectedContact ? (
-            /* Chat Interface - Full Screen */
+            /* Live Chat Interface - Full Screen */
             <div className="w-full h-screen pt-4 px-4 pb-4">
               <div className="w-full h-full max-w-4xl mx-auto">
-                <ChatBox
+                <LiveChatBox
+                  contactUserId={selectedContact.id}
                   contactName={selectedContact.name || 'Unknown'}
                   connectionStrength={selectedContact.strength}
                   onClose={handleCloseChat}
                   height={window.innerHeight - 120} // Account for header and padding
-                  initialMessages={generateSampleMessages(selectedContact.name || 'Unknown')}
                 />
               </div>
             </div>
           ) : (
             /* Hearth Display */
-            <div className="w-full min-h-screen flex items-center justify-center px-4 overflow-auto">
-              <div className="w-full h-full">
+            <div className="w-full min-h-screen flex items-center justify-center px-4 overflow-auto bg-black">
+              <div className="w-full h-full relative">
+                {/* Empty Hearth State - Simplified */}
+                {userConnections.length === 0 && (
+                  <div className="absolute inset-0 flex items-center justify-center z-30">
+                    <IconedButton
+                      icon={<UserPlus className="w-6 h-6" />}
+                      label="Add Friends"
+                      size="lg"
+                      onClick={() => {
+                        setActiveTab('friends');
+                        setShowSettings(true);
+                      }}
+                    />
+                  </div>
+                )}
+
                 {/* Responsive Hearth Component with scrolling support */}
                 <div 
                   className="w-full h-full overflow-auto scrollbar-hide"
@@ -341,11 +513,13 @@ export const MainPage: React.FC = () => {
                   }}
                 >
                   <Hearth
-                    flames={userConnections}
+                    flames={enhancedUserConnections}
                     width={hearthDimensions.width}
                     height={hearthDimensions.height}
                     onFlameClick={handleFlameClick}
+                    onRefresh={loadFriendsData}
                     className="w-full h-full"
+                    showUnreadIndicators={true}
                   />
                 </div>
               </div>
@@ -446,6 +620,24 @@ export const MainPage: React.FC = () => {
                 >
                   {activeTab === 'profile' && (
                     <div className="space-y-6 pb-4">
+                      {/* Profile Validation Message */}
+                      {profileMessage && (
+                        <div className={`p-3 rounded-soft border flex items-start gap-3 ${
+                          profileMessage.type === 'success' 
+                            ? 'bg-ember/20 border-ember/50' 
+                            : 'bg-carmine/20 border-carmine/50'
+                        }`}>
+                          {profileMessage.type === 'success' ? (
+                            <CheckCircle className="w-5 h-5 text-ember flex-shrink-0 mt-0.5" />
+                          ) : (
+                            <AlertCircle className="w-5 h-5 text-carmine flex-shrink-0 mt-0.5" />
+                          )}
+                          <SmallText className={profileMessage.type === 'success' ? 'text-ember' : 'text-carmine'}>
+                            {profileMessage.message}
+                          </SmallText>
+                        </div>
+                      )}
+
                       <div>
                         <Heading3 className="mb-4">Profile Settings</Heading3>
                         
@@ -478,7 +670,7 @@ export const MainPage: React.FC = () => {
                           
                           <div className="flex items-center gap-3 p-3 bg-navy/40 rounded border border-ember/30">
                             <code className="flex-1 text-ember font-mono text-sm bg-dark/50 px-3 py-2 rounded">
-                              {uniqueCode}
+                              {profile?.unique_code || 'Loading...'}
                             </code>
                             <IconedButton
                               icon={<Copy className="w-4 h-4" />}
@@ -561,8 +753,35 @@ export const MainPage: React.FC = () => {
 
                   {activeTab === 'friends' && (
                     <div className="space-y-6 pb-4">
+                      {/* Friends Validation Message */}
+                      {friendsMessage && (
+                        <div className={`p-3 rounded-soft border flex items-start gap-3 ${
+                          friendsMessage.type === 'success' 
+                            ? 'bg-ember/20 border-ember/50' 
+                            : 'bg-carmine/20 border-carmine/50'
+                        }`}>
+                          {friendsMessage.type === 'success' ? (
+                            <CheckCircle className="w-5 h-5 text-ember flex-shrink-0 mt-0.5" />
+                          ) : (
+                            <AlertCircle className="w-5 h-5 text-carmine flex-shrink-0 mt-0.5" />
+                          )}
+                          <SmallText className={friendsMessage.type === 'success' ? 'text-ember' : 'text-carmine'}>
+                            {friendsMessage.message}
+                          </SmallText>
+                        </div>
+                      )}
+
                       <div>
-                        <Heading3 className="mb-4">Add Friend</Heading3>
+                        <div className="flex items-center justify-between mb-4">
+                          <Heading3>Add Friend</Heading3>
+                          <IconedButton
+                            icon={<RefreshCw className="w-4 h-4" />}
+                            label="Refresh"
+                            size="sm"
+                            variant="ghost"
+                            onClick={loadFriendsData}
+                          />
+                        </div>
                         <TextBlock className="text-sm text-ash mb-6">
                           Enter a username or unique code to send a friend request. Once accepted, their ember will appear in your hearth.
                         </TextBlock>
@@ -580,11 +799,22 @@ export const MainPage: React.FC = () => {
                           </div>
                           
                           <div className="pt-2">
-                            <EmberButton size="sm" onClick={handleAddFriend}>
-                              Send Friend Request
+                            <EmberButton 
+                              size="sm" 
+                              onClick={handleAddFriend}
+                              disabled={loading}
+                            >
+                              {loading ? 'Sending...' : 'Send Friend Request'}
                             </EmberButton>
                           </div>
                         </div>
+
+                        {/* Error Display */}
+                        {error && (
+                          <div className="mt-4 p-3 bg-carmine/20 border border-carmine/50 rounded">
+                            <SmallText className="text-carmine">{error}</SmallText>
+                          </div>
+                        )}
 
                         {/* Incoming Friend Requests Section */}
                         <div className="mt-8 pt-6 border-t border-ember/30">
@@ -596,10 +826,10 @@ export const MainPage: React.FC = () => {
                           <div className="space-y-3">
                             {incomingRequests.length > 0 ? (
                               incomingRequests.map((request) => (
-                                <div key={request.id} className="flex items-center justify-between p-3 bg-navy/40 rounded border border-ember/30 transition-all duration-300 hover:border-ember/50">
+                                <div key={request.request_id} className="flex items-center justify-between p-3 bg-navy/40 rounded border border-ember/30 transition-all duration-300 hover:border-ember/50">
                                   <div>
-                                    <SmallText className="font-medium text-softwhite">{request.username}</SmallText>
-                                    <TinyText className="text-ash block">{formatTimeAgo(request.timestamp)}</TinyText>
+                                    <SmallText className="font-medium text-softwhite">{request.sender_nickname}</SmallText>
+                                    <TinyText className="text-ash block">{formatTimeAgo(request.created_at)}</TinyText>
                                   </div>
                                   <div className="flex gap-2">
                                     {request.status === 'pending' ? (
@@ -609,7 +839,7 @@ export const MainPage: React.FC = () => {
                                           label="Accept"
                                           size="sm"
                                           variant="ghost"
-                                          onClick={() => handleAcceptRequest(request.id)}
+                                          onClick={() => handleAcceptRequest(request.request_id)}
                                           className="text-ember hover:bg-ember/20"
                                         />
                                         <IconedButton
@@ -617,7 +847,7 @@ export const MainPage: React.FC = () => {
                                           label="Decline"
                                           size="sm"
                                           variant="ghost"
-                                          onClick={() => handleDeclineRequest(request.id)}
+                                          onClick={() => handleDeclineRequest(request.request_id)}
                                           className="text-carmine hover:bg-carmine/20"
                                         />
                                       </>
@@ -648,10 +878,10 @@ export const MainPage: React.FC = () => {
                           <div className="space-y-3">
                             {outgoingRequests.length > 0 ? (
                               outgoingRequests.map((request) => (
-                                <div key={request.id} className="flex items-center justify-between p-3 bg-deepblue/40 rounded border border-ember/20 transition-all duration-300 hover:border-ember/40">
+                                <div key={request.request_id} className="flex items-center justify-between p-3 bg-deepblue/40 rounded border border-ember/20 transition-all duration-300 hover:border-ember/40">
                                   <div>
-                                    <SmallText className="font-medium text-softwhite">{request.username}</SmallText>
-                                    <TinyText className="text-ash block">{formatTimeAgo(request.timestamp)}</TinyText>
+                                    <SmallText className="font-medium text-softwhite">{request.receiver_nickname}</SmallText>
+                                    <TinyText className="text-ash block">{formatTimeAgo(request.created_at)}</TinyText>
                                   </div>
                                   <div className="flex items-center gap-2">
                                     <Clock className="w-4 h-4 text-ash" />

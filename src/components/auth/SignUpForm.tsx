@@ -5,7 +5,7 @@ import { InputBox } from '../ui/InputBox';
 import { PasswordInput } from '../ui/PasswordInput';
 import { CheckButton } from '../ui/CheckButton';
 import { Heading2, TextBlock, SmallText } from '../ui/Typography';
-import { authService } from '../../lib/auth';
+import { signUp, validateEmail, validatePasswordStrength } from '../../lib/auth';
 import { AlertCircle, CheckCircle, Mail } from 'lucide-react';
 
 interface SignUpFormProps {
@@ -35,7 +35,7 @@ export const SignUpForm: React.FC<SignUpFormProps> = ({
   const handleEmailChange = (value: string) => {
     setEmail(value);
     if (value) {
-      setEmailValid(authService.validateEmail(value));
+      setEmailValid(validateEmail(value));
     } else {
       setEmailValid(null);
     }
@@ -45,7 +45,7 @@ export const SignUpForm: React.FC<SignUpFormProps> = ({
   const handlePasswordChange = (value: string) => {
     setPassword(value);
     if (value) {
-      const validation = authService.validatePasswordStrength(value);
+      const validation = validatePasswordStrength(value);
       setPasswordErrors(validation.errors);
     } else {
       setPasswordErrors([]);
@@ -74,11 +74,11 @@ export const SignUpForm: React.FC<SignUpFormProps> = ({
 
     try {
       // Final validation
-      if (!authService.validateEmail(email)) {
+      if (!validateEmail(email)) {
         throw new Error('Please enter a valid email address');
       }
 
-      const passwordValidation = authService.validatePasswordStrength(password);
+      const passwordValidation = validatePasswordStrength(password);
       if (!passwordValidation.valid) {
         throw new Error(passwordValidation.errors.join('. '));
       }
@@ -95,7 +95,7 @@ export const SignUpForm: React.FC<SignUpFormProps> = ({
         throw new Error('You must agree to the terms and conditions');
       }
 
-      const { data, error } = await authService.signUp(email, password, nickname);
+      const { data, error } = await signUp(email, password, nickname);
 
       if (error) {
         throw error;

@@ -1,14 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { BurningPaperCard } from './ui/Card';
 import { EmberButton } from './ui/Button';
+import { IconedButton } from './ui/IconedButton';
+import { CheckButton } from './ui/CheckButton';
 import { InputBox } from './ui/InputBox';
 import { PasswordInput } from './ui/PasswordInput';
-import { CheckButton } from './ui/CheckButton';
-import { IconedButton } from './ui/IconedButton';
 import { Heading1, Heading2, Heading3, TextBlock, SmallText } from './ui/Typography';
 import { Hearth } from './ui/Hearth';
-import { Sparkles, Eye, MessageCircle, Zap, Users, AlertCircle, CheckCircle } from 'lucide-react';
-import { authService } from '../lib/auth';
+import { Sparkles, Eye, MessageCircle, Zap, Users, AlertCircle, CheckCircle, Mail, RefreshCw } from 'lucide-react';
+import { signUp, signIn, validateEmail, validatePasswordStrength, resendConfirmation } from '../lib/auth';
 
 const EMBER_COLORS = [
   '255,191,0',   // ember yellow
@@ -55,8 +55,8 @@ const generateLetterClipPath = (seed: number) => {
     { x: seededRand(65, 85), y: seededRand(-6, 2) },
     { x: seededRand(100 - maxXCut, 100 + maxXCut), y: seededRand(15, 35) },
     { x: seededRand(100 - maxXCut, 100 + maxXCut), y: seededRand(65, 85) },
-    { x: seededRand(65, 85), y: seededRand(98, 106) },
-    { x: seededRand(15, 35), y: seededRand(98, 106) },
+    { x: seededRand(65, 85), y: seededRand(97, 106) },
+    { x: seededRand(15, 35), y: seededRand(97, 106) },
     { x: seededRand(-maxXCut, maxXCut), y: seededRand(65, 85) },
     { x: seededRand(-maxXCut, maxXCut), y: seededRand(15, 35) }
   ];
@@ -84,6 +84,8 @@ export const LandingPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [needsEmailConfirmation, setNeedsEmailConfirmation] = useState(false);
+  const [resendingEmail, setResendingEmail] = useState(false);
   
   // Real-time validation states
   const [emailValid, setEmailValid] = useState<boolean | null>(null);
@@ -107,7 +109,7 @@ export const LandingPage: React.FC = () => {
   const handleEmailChange = (value: string) => {
     setEmail(value);
     if (value) {
-      setEmailValid(authService.validateEmail(value));
+      setEmailValid(validateEmail(value));
     } else {
       setEmailValid(null);
     }
@@ -117,7 +119,7 @@ export const LandingPage: React.FC = () => {
   const handlePasswordChange = (value: string) => {
     setPassword(value);
     if (value) {
-      const validation = authService.validatePasswordStrength(value);
+      const validation = validatePasswordStrength(value);
       setPasswordErrors(validation.errors);
     } else {
       setPasswordErrors([]);
@@ -148,11 +150,11 @@ export const LandingPage: React.FC = () => {
     try {
       if (activeTab === 'signup') {
         // Sign up validation
-        if (!authService.validateEmail(email)) {
+        if (!validateEmail(email)) {
           throw new Error('Please enter a valid email address');
         }
 
-        const passwordValidation = authService.validatePasswordStrength(password);
+        const passwordValidation = validatePasswordStrength(password);
         if (!passwordValidation.valid) {
           throw new Error(passwordValidation.errors.join('. '));
         }
@@ -169,18 +171,22 @@ export const LandingPage: React.FC = () => {
           throw new Error('You must agree to the terms and conditions');
         }
 
-        const { data, error } = await authService.signUp(email, password, nickname);
+        const { data, error } = await signUp(email, password, nickname);
 
         if (error) {
           throw error;
         }
 
-        if (data.user) {
+        if (data?.needsEmailConfirmation) {
+          setNeedsEmailConfirmation(true);
+        } else if (data?.user) {
+          // User was created and signed in immediately (no email confirmation required)
+          // The AuthProvider will handle the redirect automatically
           setSuccess(true);
         }
       } else {
         // Sign in validation
-        if (!authService.validateEmail(email)) {
+        if (!validateEmail(email)) {
           throw new Error('Please enter a valid email address');
         }
 
@@ -188,21 +194,47 @@ export const LandingPage: React.FC = () => {
           throw new Error('Please enter your password');
         }
 
-        const { data, error } = await authService.signIn(email, password);
+        const { data, error } = await signIn(email, password);
 
         if (error) {
           throw error;
         }
 
         if (data.user) {
-          // Redirect to main app
-          window.location.href = '/';
+          // User signed in successfully
+          // The AuthProvider will handle the redirect automatically
+          setSuccess(true);
         }
       }
     } catch (err: any) {
       setError(err.message || 'An error occurred during authentication');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Handle resending confirmation email
+  const handleResendConfirmation = async () => {
+    if (!email) {
+      setError('Please enter your email address');
+      return;
+    }
+
+    setResendingEmail(true);
+    setError(null);
+
+    try {
+      const { error } = await resendConfirmation(email);
+      
+      if (error) {
+        throw error;
+      }
+
+      alert('Confirmation email sent! Please check your inbox.');
+    } catch (err: any) {
+      setError(err.message || 'Failed to resend confirmation email');
+    } finally {
+      setResendingEmail(false);
     }
   };
 
@@ -254,7 +286,74 @@ export const LandingPage: React.FC = () => {
     { id: '5', x: 75, y: 80, strength: 0.8, size: 65, name: 'David' },
   ];
 
-  // Show success message for sign up
+  // Show success message for sign up with email confirmation
+  if (needsEmailConfirmation) {
+    return (
+      <div className="min-h-screen bg-[var(--color-dark)] text-[var(--color-white)] flex items-center justify-center px-8 py-16">
+        <div className="max-w-md mx-auto">
+          <BurningPaperCard glowOnHover className="text-center">
+            <div className="space-y-6">
+              <div className="w-16 h-16 bg-gradient-to-br from-ember to-carmine rounded-full mx-auto flex items-center justify-center">
+                <Mail className="w-8 h-8 text-dark" />
+              </div>
+              <div>
+                <Heading2 className="text-ember mb-4">Check Your Email</Heading2>
+                <TextBlock className="text-ash mb-6">
+                  We've sent a verification link to <strong className="text-softwhite">{email}</strong>. 
+                  Please check your email and click the link to activate your account.
+                </TextBlock>
+                <SmallText className="text-ash mb-4">
+                  Didn't receive the email? Check your spam folder.
+                </SmallText>
+              </div>
+              
+              <div className="space-y-3">
+                <EmberButton 
+                  onClick={handleResendConfirmation}
+                  disabled={resendingEmail}
+                  size="sm"
+                  className="w-full"
+                >
+                  {resendingEmail ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                      Sending...
+                    </>
+                  ) : (
+                    'Resend Confirmation Email'
+                  )}
+                </EmberButton>
+                
+                <button
+                  onClick={() => {
+                    setNeedsEmailConfirmation(false);
+                    setActiveTab('login');
+                    setEmail('');
+                    setPassword('');
+                    setNickname('');
+                    setConfirmPassword('');
+                    setAgreeToTerms(false);
+                    setError(null);
+                  }}
+                  className="text-ember hover:text-carmine transition-colors text-sm"
+                >
+                  Back to Sign In
+                </button>
+              </div>
+              
+              {error && (
+                <div className="p-3 bg-carmine/20 border border-carmine/50 rounded-soft">
+                  <SmallText className="text-carmine">{error}</SmallText>
+                </div>
+              )}
+            </div>
+          </BurningPaperCard>
+        </div>
+      </div>
+    );
+  }
+
+  // Show success message for sign up without email confirmation
   if (success && activeTab === 'signup') {
     return (
       <div className="min-h-screen bg-[var(--color-dark)] text-[var(--color-white)] flex items-center justify-center px-8 py-16">
@@ -265,30 +364,36 @@ export const LandingPage: React.FC = () => {
                 <CheckCircle className="w-8 h-8 text-dark" />
               </div>
               <div>
-                <Heading2 className="text-ember mb-4">Check Your Email</Heading2>
+                <Heading2 className="text-ember mb-4">Welcome to Embr!</Heading2>
                 <TextBlock className="text-ash mb-6">
-                  We've sent a verification link to <strong className="text-softwhite">{email}</strong>. 
-                  Please check your email and click the link to activate your account.
+                  Your account has been created successfully. Redirecting you to your hearth...
                 </TextBlock>
-                <SmallText className="text-ash">
-                  Didn't receive the email? Check your spam folder or try signing up again.
-                </SmallText>
               </div>
-              <button
-                onClick={() => {
-                  setSuccess(false);
-                  setActiveTab('login');
-                  setEmail('');
-                  setPassword('');
-                  setNickname('');
-                  setConfirmPassword('');
-                  setAgreeToTerms(false);
-                  setError(null);
-                }}
-                className="text-ember hover:text-carmine transition-colors text-sm"
-              >
-                Back to Sign In
-              </button>
+              <div className="w-8 h-8 bg-ember rounded-full mx-auto animate-pulse" />
+            </div>
+          </BurningPaperCard>
+        </div>
+      </div>
+    );
+  }
+
+  // Show success message for sign in
+  if (success && activeTab === 'login') {
+    return (
+      <div className="min-h-screen bg-[var(--color-dark)] text-[var(--color-white)] flex items-center justify-center px-8 py-16">
+        <div className="max-w-md mx-auto">
+          <BurningPaperCard glowOnHover className="text-center">
+            <div className="space-y-6">
+              <div className="w-16 h-16 bg-gradient-to-br from-ember to-carmine rounded-full mx-auto flex items-center justify-center">
+                <CheckCircle className="w-8 h-8 text-dark" />
+              </div>
+              <div>
+                <Heading2 className="text-ember mb-4">Welcome Back!</Heading2>
+                <TextBlock className="text-ash mb-6">
+                  You've signed in successfully. Redirecting you to your hearth...
+                </TextBlock>
+              </div>
+              <div className="w-8 h-8 bg-ember rounded-full mx-auto animate-pulse" />
             </div>
           </BurningPaperCard>
         </div>
@@ -551,29 +656,22 @@ export const LandingPage: React.FC = () => {
                 <label className="block text-sm font-medium text-softwhite mb-2">
                   Email Address *
                 </label>
-                <div className="relative">
-                  <InputBox
-                    value={email}
-                    onChange={handleEmailChange}
-                    placeholder="your@email.com"
-                    className={`pr-10 ${
-                      emailValid === true ? 'border-green-500' : 
-                      emailValid === false ? 'border-carmine' : ''
-                    }`}
-                  />
-                  {emailValid !== null && (
-                    <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                      {emailValid ? (
-                        <CheckCircle className="w-5 h-5 text-green-500" />
-                      ) : (
-                        <AlertCircle className="w-5 h-5 text-carmine" />
-                      )}
-                    </div>
-                  )}
-                </div>
+                <InputBox
+                  value={email}
+                  onChange={handleEmailChange}
+                  placeholder="your@email.com"
+                  className="w-full"
+                />
                 {emailValid === false && (
-                  <SmallText className="text-carmine mt-1">
+                  <SmallText className="text-carmine mt-1 flex items-center gap-2">
+                    <AlertCircle className="w-3 h-3 flex-shrink-0" />
                     Please enter a valid email address
+                  </SmallText>
+                )}
+                {emailValid === true && (
+                  <SmallText className="text-green-500 mt-1 flex items-center gap-2">
+                    <CheckCircle className="w-3 h-3" />
+                    Valid email address
                   </SmallText>
                 )}
               </div>
@@ -587,6 +685,7 @@ export const LandingPage: React.FC = () => {
                     value={nickname}
                     onChange={setNickname}
                     placeholder="Your display name"
+                    className="w-full"
                   />
                   <SmallText className="text-ash mt-1">
                     This is how others will see you (2-50 characters)
@@ -602,7 +701,7 @@ export const LandingPage: React.FC = () => {
                   value={password}
                   onChange={handlePasswordChange}
                   placeholder={activeTab === 'signup' ? "Create a strong password" : "Enter your password"}
-                  className={passwordErrors.length > 0 ? 'border-carmine' : ''}
+                  className="w-full"
                 />
                 {activeTab === 'signup' && passwordErrors.length > 0 && (
                   <div className="mt-2 space-y-1">
@@ -627,29 +726,22 @@ export const LandingPage: React.FC = () => {
                   <label className="block text-sm font-medium text-softwhite mb-2">
                     Confirm Password *
                   </label>
-                  <div className="relative">
-                    <PasswordInput
-                      value={confirmPassword}
-                      onChange={handleConfirmPasswordChange}
-                      placeholder="Confirm your password"
-                      className={`pr-10 ${
-                        passwordsMatch === true ? 'border-green-500' : 
-                        passwordsMatch === false ? 'border-carmine' : ''
-                      }`}
-                    />
-                    {passwordsMatch !== null && (
-                      <div className="absolute right-12 top-1/2 transform -translate-y-1/2">
-                        {passwordsMatch ? (
-                          <CheckCircle className="w-5 h-5 text-green-500" />
-                        ) : (
-                          <AlertCircle className="w-5 h-5 text-carmine" />
-                        )}
-                      </div>
-                    )}
-                  </div>
+                  <PasswordInput
+                    value={confirmPassword}
+                    onChange={handleConfirmPasswordChange}
+                    placeholder="Confirm your password"
+                    className="w-full"
+                  />
                   {passwordsMatch === false && (
-                    <SmallText className="text-carmine mt-1">
+                    <SmallText className="text-carmine mt-1 flex items-center gap-2">
+                      <AlertCircle className="w-3 h-3 flex-shrink-0" />
                       Passwords do not match
+                    </SmallText>
+                  )}
+                  {passwordsMatch === true && (
+                    <SmallText className="text-green-500 mt-1 flex items-center gap-2">
+                      <CheckCircle className="w-3 h-3" />
+                      Passwords match
                     </SmallText>
                   )}
                 </div>
@@ -704,12 +796,12 @@ export const LandingPage: React.FC = () => {
               </TextBlock>
             </div>
 
-            {/* Example Hearth with Live Flames */}
+            {/* Example Hearth with Live Flames - Dark Background */}
             <div className="relative">
               <BurningPaperCard glowOnHover className="text-center">
                 <div className="space-y-4">
                   <Heading3 className="mb-4">Your connections, visualized as living embers</Heading3>
-                  <div className="flex justify-center">
+                  <div className="flex justify-center bg-black rounded-soft p-4">
                     <Hearth
                       flames={exampleFlames}
                       width={400}

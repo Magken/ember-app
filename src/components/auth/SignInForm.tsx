@@ -4,7 +4,7 @@ import { EmberButton } from '../ui/Button';
 import { InputBox } from '../ui/InputBox';
 import { PasswordInput } from '../ui/PasswordInput';
 import { Heading2, TextBlock, SmallText } from '../ui/Typography';
-import { authService } from '../../lib/auth';
+import { signIn, resetPassword, validateEmail } from '../../lib/auth';
 import { AlertCircle, CheckCircle } from 'lucide-react';
 
 interface SignInFormProps {
@@ -29,15 +29,7 @@ export const SignInForm: React.FC<SignInFormProps> = ({
     setLoading(true);
 
     try {
-      if (!authService.validateEmail(email)) {
-        throw new Error('Please enter a valid email address');
-      }
-
-      if (!password) {
-        throw new Error('Please enter your password');
-      }
-
-      const { data, error } = await authService.signIn(email, password);
+      const { data, error } = await signIn(email, password);
 
       if (error) {
         throw error;
@@ -59,7 +51,7 @@ export const SignInForm: React.FC<SignInFormProps> = ({
       return;
     }
 
-    if (!authService.validateEmail(email)) {
+    if (!validateEmail(email)) {
       setError('Please enter a valid email address');
       return;
     }
@@ -68,7 +60,7 @@ export const SignInForm: React.FC<SignInFormProps> = ({
     setError(null);
 
     try {
-      const { error } = await authService.resetPassword(email);
+      const { error } = await resetPassword(email);
       
       if (error) {
         throw error;
