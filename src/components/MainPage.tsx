@@ -65,6 +65,9 @@ export const MainPage: React.FC = () => {
   const [friendshipsUnsubscribe, setFriendshipsUnsubscribe] = useState<(() => void) | null>(null);
   const [conversationsUnsubscribe, setConversationsUnsubscribe] = useState<(() => void) | null>(null);
 
+  // Loading state for flame strength calculations
+  const [calculatingStrengths, setCalculatingStrengths] = useState(false);
+
   // Set nickname from profile when available
   useEffect(() => {
     if (profile?.nickname) {
@@ -119,7 +122,7 @@ export const MainPage: React.FC = () => {
     return () => window.removeEventListener('resize', updateDimensions);
   }, []);
 
-  // Load friends and friend requests
+  // Load friends and friend requests WITHOUT flame strength calculation
   const loadFriendsData = useCallback(async () => {
     try {
       setLoading(true);
@@ -149,10 +152,6 @@ export const MainPage: React.FC = () => {
 
       setFriends(friendsData);
       setFriendRequests(requestsData);
-
-      // Convert friends to flame data for hearth (without strength calculation yet)
-      const flameData = convertFriendsToFlames(friendsData);
-      setUserConnections(flameData);
 
       // Load unread message counts for each friend
       await loadUnreadCounts(friendsData);
@@ -188,31 +187,24 @@ export const MainPage: React.FC = () => {
     }
   };
 
-  // Recalculate flame strengths based on the formula
+  // Recalculate flame strengths and update display
   const recalculateFlameStrengths = useCallback(async () => {
+    if (friends.length === 0) {
+      console.log('No friends to calculate strengths for');
+      setUserConnections([]);
+      return;
+    }
+
     try {
-      console.log('Recalculating flame strengths...');
-      
-      // Get the latest friends data
-      const { data: friendsData, error } = await getFriends();
-      
-      if (error || !friendsData) {
-        console.error('Failed to get friends for strength calculation:', error);
-        return;
-      }
-      
-      if (friendsData.length === 0) {
-        console.log('No friends to calculate strengths for');
-        setUserConnections([]);
-        return;
-      }
+      setCalculatingStrengths(true);
+      console.log('Recalculating flame strengths for', friends.length, 'friends');
       
       // Calculate strengths for all friends in batch
-      const friendIds = friendsData.map(friend => friend.friend_id);
+      const friendIds = friends.map(friend => friend.friend_id);
       const strengthResults = await calculateFlameStrengthsBatch(friendIds);
       
       // Update friends with new strengths
-      const updatedFriends = friendsData.map(friend => ({
+      const updatedFriends = friends.map(friend => ({
         ...friend,
         connection_strength: strengthResults[friend.friend_id] || 0.1
       }));
@@ -224,13 +216,32 @@ export const MainPage: React.FC = () => {
       
       // Convert to updated flame data
       const updatedFlameData = convertFriendsToFlames(updatedFriends);
-      setUserConnections(updatedFlameData);
+      
+      // Add unread indicators to flame data
+      const enhancedFlameData = updatedFlameData.map(flame => ({
+        ...flame,
+        hasUnreadMessages: (unreadCounts[flame.id] || 0) > 0,
+        unreadCount: unreadCounts[flame.id] || 0
+      }));
+      
+      setUserConnections(enhancedFlameData);
       
       console.log('Flame strengths recalculated successfully');
     } catch (error) {
       console.error('Error recalculating flame strengths:', error);
+      
+      // Fallback: convert friends to flames with default strengths
+      const fallbackFlameData = convertFriendsToFlames(friends);
+      const enhancedFallbackData = fallbackFlameData.map(flame => ({
+        ...flame,
+        hasUnreadMessages: (unreadCounts[flame.id] || 0) > 0,
+        unreadCount: unreadCounts[flame.id] || 0
+      }));
+      setUserConnections(enhancedFallbackData);
+    } finally {
+      setCalculatingStrengths(false);
     }
-  }, []);
+  }, [friends, unreadCounts]);
 
   // Set up real-time subscriptions for friend requests
   useEffect(() => {
@@ -265,7 +276,10 @@ export const MainPage: React.FC = () => {
       console.log('Friendships updated via real-time subscription');
       // Reload friends data and recalculate flame strengths
       loadFriendsData().then(() => {
-        recalculateFlameStrengths();
+        // Small delay to ensure data is loaded before recalculating
+        setTimeout(() => {
+          recalculateFlameStrengths();
+        }, 500);
       });
     });
     
@@ -303,8 +317,10 @@ export const MainPage: React.FC = () => {
   // Load data on component mount
   useEffect(() => {
     loadFriendsData().then(() => {
-      // Calculate flame strengths after initial load
-      recalculateFlameStrengths();
+      // Calculate flame strengths after initial load with a small delay
+      setTimeout(() => {
+        recalculateFlameStrengths();
+      }, 100);
     });
   }, [loadFriendsData, recalculateFlameStrengths]);
 
@@ -313,7 +329,11 @@ export const MainPage: React.FC = () => {
     const handleFriendRequestSent = () => {
       console.log('Friend request sent event received, refreshing...');
       if (activeTab === 'friends') {
-        loadFriendsData();
+        loadFriendsData().then(() => {
+          setTimeout(() => {
+            recalculateFlameStrengths();
+          }, 500);
+        });
       }
     };
 
@@ -321,7 +341,9 @@ export const MainPage: React.FC = () => {
       console.log('Friend request responded event received, refreshing...');
       if (activeTab === 'friends') {
         loadFriendsData().then(() => {
-          recalculateFlameStrengths();
+          setTimeout(() => {
+            recalculateFlameStrengths();
+          }, 500);
         });
       }
     };
@@ -587,7 +609,9 @@ export const MainPage: React.FC = () => {
       // First load the basic data
       await loadFriendsData();
       // Then recalculate flame strengths with current data
-      await recalculateFlameStrengths();
+      setTimeout(() => {
+        recalculateFlameStrengths();
+      }, 100);
     } catch (error) {
       console.error('Error during manual refresh:', error);
     } finally {
@@ -600,13 +624,6 @@ export const MainPage: React.FC = () => {
 
   // User's nickname from profile or fallback
   const userNickname = profile?.nickname || nickname || 'User';
-
-  // Enhanced user connections with unread indicators
-  const enhancedUserConnections = userConnections.map(connection => ({
-    ...connection,
-    hasUnreadMessages: (unreadCounts[connection.id] || 0) > 0,
-    unreadCount: unreadCounts[connection.id] || 0
-  }));
 
   return (
     <div className="min-h-screen bg-black text-white relative">
@@ -658,7 +675,7 @@ export const MainPage: React.FC = () => {
             <div className="w-full min-h-screen flex items-center justify-center px-4 overflow-auto bg-black">
               <div className="w-full h-full relative">
                 {/* Empty Hearth State - Simplified */}
-                {userConnections.length === 0 && (
+                {userConnections.length === 0 && !calculatingStrengths && (
                   <div className="absolute inset-0 flex items-center justify-center z-30">
                     <IconedButton
                       icon={<UserPlus className="w-6 h-6" />}
@@ -672,6 +689,16 @@ export const MainPage: React.FC = () => {
                   </div>
                 )}
 
+                {/* Loading State for Flame Calculations */}
+                {calculatingStrengths && (
+                  <div className="absolute inset-0 flex items-center justify-center z-30">
+                    <div className="text-center">
+                      <div className="w-8 h-8 bg-ember rounded-full mx-auto animate-pulse mb-4" />
+                      <SmallText className="text-ember">Calculating flame strengths...</SmallText>
+                    </div>
+                  </div>
+                )}
+
                 {/* Responsive Hearth Component with scrolling support */}
                 <div 
                   className="w-full h-full overflow-auto scrollbar-hide"
@@ -681,7 +708,7 @@ export const MainPage: React.FC = () => {
                   }}
                 >
                   <Hearth
-                    flames={enhancedUserConnections}
+                    flames={userConnections}
                     width={hearthDimensions.width}
                     height={hearthDimensions.height}
                     onFlameClick={handleFlameClick}
