@@ -24,46 +24,92 @@ interface HearthProps {
   showUnreadIndicators?: boolean; // New prop to control unread indicators
 }
 
-// Stable position generator that only changes when flame count changes or on initialization
-const generateStablePositions = (flameCount: number, existingPositions?: Array<{id: string, x: number, y: number}>): Array<{x: number, y: number}> => {
+// Stable position generator that ensures flames are at least 50px apart
+const generateStablePositions = (
+  flameCount: number, 
+  existingPositions?: Array<{id: string, x: number, y: number}>,
+  hearthWidth: number = 800,
+  hearthHeight: number = 600
+): Array<{x: number, y: number}> => {
   if (flameCount === 0) return [];
   
   const positions: Array<{x: number, y: number}> = [];
   const centerX = 50;
   const centerY = 50;
-  const minDistance = 15; // Minimum distance between flames
+  
+  // Calculate minimum distance in percentage based on 50px requirement
+  // Use the smaller dimension to ensure consistent spacing
+  const minDimension = Math.min(hearthWidth, hearthHeight);
+  const minDistancePercentage = (50 / minDimension) * 100; // Convert 50px to percentage
+  const actualMinDistance = Math.max(minDistancePercentage, 8); // Ensure at least 8% spacing
+  
+  console.log(`Generating positions with ${actualMinDistance.toFixed(1)}% minimum distance (${minDimension}px hearth)`);
   
   // If we have existing positions and the count hasn't changed, reuse them
   if (existingPositions && existingPositions.length === flameCount) {
     return existingPositions.map(pos => ({ x: pos.x, y: pos.y }));
   }
   
+  // Generate positions using improved spiral algorithm with collision detection
   for (let index = 0; index < flameCount; index++) {
     let x, y;
     let attempts = 0;
-    const maxAttempts = 50;
+    const maxAttempts = 100; // Increased attempts for better placement
+    let placed = false;
     
-    do {
-      // Use deterministic spiral pattern based on index for consistency
-      const angle = (index * 2.4) + (index * 0.1); // Deterministic angle
-      const radius = Math.sqrt(index + 1) * 8 + (index % 3) * 5; // Deterministic radius
+    // Try multiple placement strategies
+    while (!placed && attempts < maxAttempts) {
+      if (attempts < 50) {
+        // Strategy 1: Deterministic spiral pattern (first 50 attempts)
+        const spiralIndex = index + (attempts * 0.1);
+        const angle = spiralIndex * 2.4; // Golden angle for even distribution
+        const radius = Math.sqrt(spiralIndex + 1) * (actualMinDistance * 0.8); // Adjust radius based on min distance
+        
+        x = centerX + Math.cos(angle) * radius;
+        y = centerY + Math.sin(angle) * radius;
+      } else {
+        // Strategy 2: Random placement with bias toward center (remaining attempts)
+        const maxRadius = Math.min(40, 100 - actualMinDistance); // Stay within bounds
+        const angle = Math.random() * 2 * Math.PI;
+        const radius = Math.random() * maxRadius;
+        
+        x = centerX + Math.cos(angle) * radius;
+        y = centerY + Math.sin(angle) * radius;
+      }
       
-      x = centerX + Math.cos(angle) * radius;
-      y = centerY + Math.sin(angle) * radius;
+      // Keep within safe bounds (leave margin for flame size)
+      const margin = actualMinDistance / 2;
+      x = Math.max(margin, Math.min(100 - margin, x));
+      y = Math.max(margin, Math.min(100 - margin, y));
       
-      // Keep within bounds
-      x = Math.max(10, Math.min(90, x));
-      y = Math.max(10, Math.min(90, y));
+      // Check collision with existing positions
+      const hasCollision = positions.some(pos => {
+        const distance = Math.sqrt(Math.pow(pos.x - x, 2) + Math.pow(pos.y - y, 2));
+        return distance < actualMinDistance;
+      });
+      
+      if (!hasCollision) {
+        placed = true;
+      }
       
       attempts++;
-    } while (attempts < maxAttempts && positions.some(pos => {
-      const distance = Math.sqrt(Math.pow(pos.x - x, 2) + Math.pow(pos.y - y, 2));
-      return distance < minDistance;
-    }));
+    }
+    
+    // If we couldn't place without collision, use fallback position
+    if (!placed) {
+      console.warn(`Could not place flame ${index} without collision after ${maxAttempts} attempts`);
+      // Fallback: place in a grid pattern
+      const gridSize = Math.ceil(Math.sqrt(flameCount));
+      const gridX = (index % gridSize) * (80 / gridSize) + 10;
+      const gridY = Math.floor(index / gridSize) * (80 / gridSize) + 10;
+      x = gridX;
+      y = gridY;
+    }
     
     positions.push({ x, y });
   }
   
+  console.log(`Generated ${positions.length} positions with minimum ${actualMinDistance.toFixed(1)}% spacing`);
   return positions;
 };
 
@@ -98,7 +144,8 @@ export const Hearth: React.FC<HearthProps> = ({
     if (shouldRegeneratePositions) {
       console.log(`Generating positions - initialized: ${initialized}, count changed: ${lastFlameCount} -> ${currentFlameCount}`);
       
-      const newPositions = generateStablePositions(currentFlameCount, stablePositions);
+      // Pass hearth dimensions to position generator for accurate spacing calculation
+      const newPositions = generateStablePositions(currentFlameCount, stablePositions, width, height);
       
       // Map positions to flame IDs to maintain consistency
       const positionsWithIds = flames.map((flame, index) => ({
@@ -119,7 +166,7 @@ export const Hearth: React.FC<HearthProps> = ({
         setAutoZoomed(false);
       }
     }
-  }, [flames.length, flames, lastFlameCount, initialized, stablePositions]);
+  }, [flames.length, flames, lastFlameCount, initialized, stablePositions, width, height]);
 
   // Auto-zoom to fit all flames on initialization or when count changes
   useEffect(() => {
@@ -361,7 +408,7 @@ export const Hearth: React.FC<HearthProps> = ({
 
       {/* Pan Instructions */}
       <div className="absolute bottom-4 left-4 z-20 px-2 py-1 bg-navy/80 text-ash text-xs rounded border border-ember/30 pointer-events-none">
-        Drag to pan
+        Drag to pan • 50px spacing
       </div>
 
       {/* Hearth Canvas with Pure Black Background */}
@@ -391,7 +438,7 @@ export const Hearth: React.FC<HearthProps> = ({
           />
         </div>
 
-        {/* Flames positioned on the hearth with stable positions */}
+        {/* Flames positioned on the hearth with guaranteed 50px spacing */}
         {sortedFlames.map((flame) => {
           const flameSize = flame.size || 60;
           
