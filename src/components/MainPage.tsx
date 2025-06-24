@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { BurningPaperCard } from './ui/Card';
 import { IconedButton } from './ui/IconedButton';
 import { InputBox } from './ui/InputBox';
@@ -24,6 +24,7 @@ import {
 } from '../lib/friends';
 import { getUserConversations, getUnreadCountForUser, messagingSubscriptionManager } from '../lib/messaging';
 import { updateProfile, changePassword, signOut, deleteAccount } from '../lib/auth';
+import { calculateFlameStrength } from '../lib/flameStrength';
 
 interface ValidationMessage {
   type: 'success' | 'error';
@@ -57,6 +58,11 @@ export const MainPage: React.FC = () => {
 
   // Unread messages state
   const [unreadCounts, setUnreadCounts] = useState<{ [userId: string]: number }>({});
+
+  // Polling intervals
+  const [friendsPollingActive, setFriendsPollingActive] = useState(false);
+  const [unreadCountsPollingActive, setUnreadCountsPollingActive] = useState(true);
+  const [flameStrengthPollingActive, setFlameStrengthPollingActive] = useState(true);
 
   // Set nickname from profile when available
   useEffect(() => {
@@ -113,7 +119,7 @@ export const MainPage: React.FC = () => {
   }, []);
 
   // Load friends and friend requests
-  const loadFriendsData = async () => {
+  const loadFriendsData = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -154,7 +160,7 @@ export const MainPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   // Load unread message counts for friends
   const loadUnreadCounts = async (friendsList: Friend[]) => {
@@ -177,6 +183,49 @@ export const MainPage: React.FC = () => {
     }
   };
 
+  // Recalculate flame strengths based on the formula
+  const recalculateFlameStrengths = useCallback(async () => {
+    try {
+      console.log('Recalculating flame strengths...');
+      
+      // Get the latest friends data
+      const { data: friendsData, error } = await getFriends();
+      
+      if (error || !friendsData) {
+        console.error('Failed to get friends for strength calculation:', error);
+        return;
+      }
+      
+      // For each friend, calculate the actual strength based on the formula
+      const updatedFriends = await Promise.all(
+        friendsData.map(async (friend) => {
+          try {
+            // Calculate strength using the formula
+            const strength = await calculateFlameStrength(friend.friend_id);
+            return {
+              ...friend,
+              connection_strength: strength
+            };
+          } catch (err) {
+            console.error(`Failed to calculate strength for ${friend.friend_id}:`, err);
+            return friend; // Keep original strength on error
+          }
+        })
+      );
+      
+      // Update friends with new strengths
+      setFriends(updatedFriends);
+      
+      // Convert to updated flame data
+      const updatedFlameData = convertFriendsToFlames(updatedFriends);
+      setUserConnections(updatedFlameData);
+      
+      console.log('Flame strengths recalculated successfully');
+    } catch (error) {
+      console.error('Error recalculating flame strengths:', error);
+    }
+  }, []);
+
   // Set up real-time subscription for conversations
   useEffect(() => {
     const unsubscribe = messagingSubscriptionManager.subscribeToConversations(() => {
@@ -192,7 +241,7 @@ export const MainPage: React.FC = () => {
   // Load data on component mount
   useEffect(() => {
     loadFriendsData();
-  }, []);
+  }, [loadFriendsData]);
 
   // Listen for custom refresh events
   useEffect(() => {
@@ -217,7 +266,57 @@ export const MainPage: React.FC = () => {
       window.removeEventListener('friendRequestSent', handleFriendRequestSent);
       window.removeEventListener('friendRequestResponded', handleFriendRequestResponded);
     };
-  }, [activeTab]);
+  }, [activeTab, loadFriendsData]);
+
+  // 5-second polling for friend requests when friends tab is open
+  useEffect(() => {
+    if (activeTab === 'friends' && !friendsPollingActive) {
+      setFriendsPollingActive(true);
+      
+      const interval = setInterval(() => {
+        console.log('Polling for friend requests...');
+        getFriendRequests().then(({ data, error }) => {
+          if (!error && data) {
+            setFriendRequests(data);
+          }
+        });
+      }, 5000); // 5 seconds
+      
+      return () => {
+        clearInterval(interval);
+        setFriendsPollingActive(false);
+      };
+    }
+  }, [activeTab, friendsPollingActive]);
+
+  // 5-second polling for unread message counts when hearth is visible
+  useEffect(() => {
+    if (!showChat && unreadCountsPollingActive) {
+      const interval = setInterval(() => {
+        console.log('Polling for unread message counts...');
+        if (friends.length > 0) {
+          loadUnreadCounts(friends);
+        }
+      }, 5000); // 5 seconds
+      
+      return () => clearInterval(interval);
+    }
+  }, [showChat, unreadCountsPollingActive, friends]);
+
+  // 30-minute polling for flame strength recalculation
+  useEffect(() => {
+    if (flameStrengthPollingActive) {
+      // Initial calculation
+      recalculateFlameStrengths();
+      
+      const interval = setInterval(() => {
+        console.log('Recalculating flame strengths (30-minute interval)...');
+        recalculateFlameStrengths();
+      }, 30 * 60 * 1000); // 30 minutes
+      
+      return () => clearInterval(interval);
+    }
+  }, [flameStrengthPollingActive, recalculateFlameStrengths]);
 
   const handlePasswordChange = async () => {
     // Clear previous messages
