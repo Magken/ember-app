@@ -398,22 +398,6 @@ export const LandingPage: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-[var(--color-dark)] text-[var(--color-white)]">
-      {/* Bolt Logo - Top Left */}
-      <div className="absolute top-4 left-4 z-50">
-        <a 
-          href="https://bolt.new" 
-          target="_blank" 
-          rel="noopener noreferrer"
-          className="block hover:opacity-80 transition-opacity"
-        >
-          <img 
-            src="/logotext_poweredby_360w.png" 
-            alt="Powered by Bolt" 
-            className="h-8 w-auto"
-          />
-        </a>
-      </div>
-
       {/* Hero Section */}
       <section className="relative min-h-screen flex flex-col items-center justify-center px-8 py-16">
         {/* Enhanced animated background embers */}
@@ -882,6 +866,22 @@ export const LandingPage: React.FC = () => {
           </div>
         </div>
       </section>
+
+      {/* Bolt Logo - Bottom of page */}
+      <div className="flex justify-center pb-8">
+        <a 
+          href="https://bolt.new" 
+          target="_blank" 
+          rel="noopener noreferrer"
+          className="block hover:opacity-80 transition-opacity"
+        >
+          <img 
+            src="/logotext_poweredby_360w.png" 
+            alt="Powered by Bolt" 
+            className="h-8 w-auto"
+          />
+        </a>
+      </div>
     </div>
   );
 };
