@@ -24,6 +24,44 @@ interface HearthProps {
   showUnreadIndicators?: boolean; // New prop to control unread indicators
 }
 
+// Stable position generator that only changes when flame count changes
+const generateStablePositions = (flameCount: number): Array<{x: number, y: number}> => {
+  if (flameCount === 0) return [];
+  
+  const positions: Array<{x: number, y: number}> = [];
+  const centerX = 50;
+  const centerY = 50;
+  const minDistance = 15; // Minimum distance between flames
+  
+  for (let index = 0; index < flameCount; index++) {
+    let x, y;
+    let attempts = 0;
+    const maxAttempts = 50;
+    
+    do {
+      // Use deterministic spiral pattern based on index
+      const angle = (index * 2.4) + (index * 0.1); // Deterministic angle
+      const radius = Math.sqrt(index + 1) * 8 + (index % 3) * 5; // Deterministic radius
+      
+      x = centerX + Math.cos(angle) * radius;
+      y = centerY + Math.sin(angle) * radius;
+      
+      // Keep within bounds
+      x = Math.max(10, Math.min(90, x));
+      y = Math.max(10, Math.min(90, y));
+      
+      attempts++;
+    } while (attempts < maxAttempts && positions.some(pos => {
+      const distance = Math.sqrt(Math.pow(pos.x - x, 2) + Math.pow(pos.y - y, 2));
+      return distance < minDistance;
+    }));
+    
+    positions.push({ x, y });
+  }
+  
+  return positions;
+};
+
 export const Hearth: React.FC<HearthProps> = ({
   flames,
   className = '',
@@ -41,24 +79,39 @@ export const Hearth: React.FC<HearthProps> = ({
   const [panStart, setPanStart] = useState({ x: 0, y: 0 });
   const hearthRef = useRef<HTMLDivElement>(null);
   const [autoZoomed, setAutoZoomed] = useState(false);
+  
+  // Store stable positions based on flame count
+  const [stablePositions, setStablePositions] = useState<Array<{x: number, y: number}>>([]);
+  const [lastFlameCount, setLastFlameCount] = useState(0);
 
-  // Auto-zoom to fit all flames on initialization
+  // Generate stable positions only when flame count changes
   useEffect(() => {
-    if (flames.length > 0 && !autoZoomed) {
+    if (flames.length !== lastFlameCount) {
+      console.log(`Flame count changed from ${lastFlameCount} to ${flames.length}, regenerating positions`);
+      const newPositions = generateStablePositions(flames.length);
+      setStablePositions(newPositions);
+      setLastFlameCount(flames.length);
+      setAutoZoomed(false); // Reset auto-zoom when count changes
+    }
+  }, [flames.length, lastFlameCount]);
+
+  // Auto-zoom to fit all flames on initialization or when count changes
+  useEffect(() => {
+    if (flames.length > 0 && stablePositions.length > 0 && !autoZoomed) {
       autoFitFlames();
       setAutoZoomed(true);
     }
-  }, [flames, autoZoomed]);
+  }, [flames.length, stablePositions.length, autoZoomed]);
 
   const autoFitFlames = () => {
-    if (flames.length === 0) return;
+    if (stablePositions.length === 0) return;
 
-    // Find bounds of all flames
+    // Find bounds of all flame positions
     const padding = 10; // Percentage padding
-    const minX = Math.min(...flames.map(f => f.x)) - padding;
-    const maxX = Math.max(...flames.map(f => f.x)) + padding;
-    const minY = Math.min(...flames.map(f => f.y)) - padding;
-    const maxY = Math.max(...flames.map(f => f.y)) + padding;
+    const minX = Math.min(...stablePositions.map(p => p.x)) - padding;
+    const maxX = Math.max(...stablePositions.map(p => p.x)) + padding;
+    const minY = Math.min(...stablePositions.map(p => p.y)) - padding;
+    const maxY = Math.max(...stablePositions.map(p => p.y)) + padding;
 
     // Calculate required zoom to fit all flames
     const contentWidth = maxX - minX;
@@ -88,7 +141,7 @@ export const Hearth: React.FC<HearthProps> = ({
   };
 
   const resetView = () => {
-    if (flames.length > 0) {
+    if (stablePositions.length > 0) {
       autoFitFlames();
     } else {
       // Reset to default view when no flames
@@ -104,10 +157,8 @@ export const Hearth: React.FC<HearthProps> = ({
     }
   };
 
-  // Mouse drag handlers for panning - FIXED: Removed problematic event blocking
+  // Mouse drag handlers for panning
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    // Only start dragging if clicking directly on the hearth background
-    // Don't prevent events from reaching buttons or flames
     const target = e.target as HTMLElement;
     
     // Allow events to reach buttons and flames
@@ -190,10 +241,26 @@ export const Hearth: React.FC<HearthProps> = ({
     }
   }, [isDragging, handleMouseMove, handleMouseUp, handleTouchMove, handleTouchEnd]);
 
+  // Combine flames with stable positions
+  const positionedFlames = useMemo(() => {
+    if (flames.length === 0 || stablePositions.length === 0) {
+      return [];
+    }
+
+    return flames.map((flame, index) => {
+      const position = stablePositions[index] || stablePositions[0]; // Fallback to first position
+      return {
+        ...flame,
+        x: position.x,
+        y: position.y
+      };
+    });
+  }, [flames, stablePositions]);
+
   // Sort flames by strength so dying flames are more visible (rendered on top)
   const sortedFlames = useMemo(() => {
-    return [...flames].sort((a, b) => a.strength - b.strength);
-  }, [flames]);
+    return [...positionedFlames].sort((a, b) => a.strength - b.strength);
+  }, [positionedFlames]);
 
   // Function to get flame color based on strength
   const getFlameColor = (strength: number) => {
@@ -286,7 +353,7 @@ export const Hearth: React.FC<HearthProps> = ({
           />
         </div>
 
-        {/* Flames positioned on the hearth with increased spacing */}
+        {/* Flames positioned on the hearth with stable positions */}
         {sortedFlames.map((flame) => {
           const flameSize = flame.size || 60;
           
