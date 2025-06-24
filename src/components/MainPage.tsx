@@ -56,7 +56,11 @@ export const MainPage: React.FC = () => {
   const [copiedCode, setCopiedCode] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
-  // Load all data - moved before subscription hooks
+  // Real-time subscription hooks
+  const friendRequestsSubscription = useFriendRequestsSubscription(loadData);
+  const friendshipsSubscription = useFriendshipsSubscription(loadData);
+
+  // Load all data
   const loadData = useCallback(async () => {
     try {
       setError(null);
@@ -108,10 +112,6 @@ export const MainPage: React.FC = () => {
       setLoading(false);
     }
   }, []);
-
-  // Real-time subscription hooks - now after loadData is defined
-  const friendRequestsSubscription = useFriendRequestsSubscription(loadData);
-  const friendshipsSubscription = useFriendshipsSubscription(loadData);
 
   // Initial load
   useEffect(() => {
