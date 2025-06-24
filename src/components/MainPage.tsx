@@ -65,6 +65,9 @@ export const MainPage: React.FC = () => {
   const [friendshipsUnsubscribe, setFriendshipsUnsubscribe] = useState<(() => void) | null>(null);
   const [conversationsUnsubscribe, setConversationsUnsubscribe] = useState<(() => void) | null>(null);
 
+  // Loading state for flame strength calculations
+  const [calculatingStrengths, setCalculatingStrengths] = useState(false);
+
   // Set nickname from profile when available
   useEffect(() => {
     if (profile?.nickname) {
@@ -150,9 +153,11 @@ export const MainPage: React.FC = () => {
       setFriends(friendsData);
       setFriendRequests(requestsData);
 
-      // Convert friends to flame data for hearth (without strength calculation yet)
-      const flameData = convertFriendsToFlames(friendsData);
-      setUserConnections(flameData);
+      // Don't display flames until strengths are calculated
+      // This prevents the default strength glitch
+      if (friendsData.length === 0) {
+        setUserConnections([]);
+      }
 
       // Load unread message counts for each friend
       await loadUnreadCounts(friendsData);
@@ -192,6 +197,7 @@ export const MainPage: React.FC = () => {
   const recalculateFlameStrengths = useCallback(async () => {
     try {
       console.log('Recalculating flame strengths...');
+      setCalculatingStrengths(true);
       
       // Get the latest friends data
       const { data: friendsData, error } = await getFriends();
@@ -204,6 +210,7 @@ export const MainPage: React.FC = () => {
       if (friendsData.length === 0) {
         console.log('No friends to calculate strengths for');
         setUserConnections([]);
+        setCalculatingStrengths(false);
         return;
       }
       
@@ -222,13 +229,15 @@ export const MainPage: React.FC = () => {
       // Update friends state
       setFriends(updatedFriends);
       
-      // Convert to updated flame data
+      // Convert to updated flame data and display
       const updatedFlameData = convertFriendsToFlames(updatedFriends);
       setUserConnections(updatedFlameData);
       
       console.log('Flame strengths recalculated successfully');
     } catch (error) {
       console.error('Error recalculating flame strengths:', error);
+    } finally {
+      setCalculatingStrengths(false);
     }
   }, []);
 
@@ -583,6 +592,8 @@ export const MainPage: React.FC = () => {
   const handleRefresh = async () => {
     console.log('Manual refresh triggered - recalculating flame strengths');
     setLoading(true);
+    setCalculatingStrengths(true);
+    
     try {
       // First load the basic data
       await loadFriendsData();
@@ -592,6 +603,7 @@ export const MainPage: React.FC = () => {
       console.error('Error during manual refresh:', error);
     } finally {
       setLoading(false);
+      setCalculatingStrengths(false);
     }
   };
 
@@ -658,7 +670,7 @@ export const MainPage: React.FC = () => {
             <div className="w-full min-h-screen flex items-center justify-center px-4 overflow-auto bg-black">
               <div className="w-full h-full relative">
                 {/* Empty Hearth State - Simplified */}
-                {userConnections.length === 0 && (
+                {userConnections.length === 0 && !calculatingStrengths && (
                   <div className="absolute inset-0 flex items-center justify-center z-30">
                     <IconedButton
                       icon={<UserPlus className="w-6 h-6" />}
@@ -672,24 +684,36 @@ export const MainPage: React.FC = () => {
                   </div>
                 )}
 
+                {/* Calculating Strengths Indicator */}
+                {calculatingStrengths && (
+                  <div className="absolute inset-0 flex items-center justify-center z-30">
+                    <div className="text-center">
+                      <div className="w-8 h-8 bg-ember rounded-full mx-auto animate-pulse mb-4" />
+                      <SmallText className="text-ember">Calculating flame strengths...</SmallText>
+                    </div>
+                  </div>
+                )}
+
                 {/* Responsive Hearth Component with scrolling support */}
-                <div 
-                  className="w-full h-full overflow-auto scrollbar-hide"
-                  style={{
-                    minWidth: `${hearthDimensions.width}px`,
-                    minHeight: `${hearthDimensions.height}px`
-                  }}
-                >
-                  <Hearth
-                    flames={enhancedUserConnections}
-                    width={hearthDimensions.width}
-                    height={hearthDimensions.height}
-                    onFlameClick={handleFlameClick}
-                    onRefresh={handleRefresh}
-                    className="w-full h-full"
-                    showUnreadIndicators={true}
-                  />
-                </div>
+                {!calculatingStrengths && userConnections.length > 0 && (
+                  <div 
+                    className="w-full h-full overflow-auto scrollbar-hide"
+                    style={{
+                      minWidth: `${hearthDimensions.width}px`,
+                      minHeight: `${hearthDimensions.height}px`
+                    }}
+                  >
+                    <Hearth
+                      flames={enhancedUserConnections}
+                      width={hearthDimensions.width}
+                      height={hearthDimensions.height}
+                      onFlameClick={handleFlameClick}
+                      onRefresh={handleRefresh}
+                      className="w-full h-full"
+                      showUnreadIndicators={true}
+                    />
+                  </div>
+                )}
               </div>
             </div>
           )}
