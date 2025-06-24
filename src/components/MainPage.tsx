@@ -59,7 +59,7 @@ export const MainPage: React.FC = () => {
   // Unread messages state
   const [unreadCounts, setUnreadCounts] = useState<{ [userId: string]: number }>({});
 
-  // Polling intervals
+  // Polling control states - separate for each type
   const [friendsPollingActive, setFriendsPollingActive] = useState(false);
   const [unreadCountsPollingActive, setUnreadCountsPollingActive] = useState(true);
   const [flameStrengthPollingActive, setFlameStrengthPollingActive] = useState(true);
@@ -268,7 +268,7 @@ export const MainPage: React.FC = () => {
     };
   }, [activeTab, loadFriendsData]);
 
-  // 5-second polling for friend requests when friends tab is open
+  // 5-second polling for friend requests when friends tab is open - FIXED: Only when tab is active
   useEffect(() => {
     if (activeTab === 'friends' && !friendsPollingActive) {
       setFriendsPollingActive(true);
@@ -277,7 +277,13 @@ export const MainPage: React.FC = () => {
         console.log('Polling for friend requests...');
         getFriendRequests().then(({ data, error }) => {
           if (!error && data) {
-            setFriendRequests(data);
+            // Only update if data actually changed to prevent unnecessary re-renders
+            setFriendRequests(prev => {
+              if (JSON.stringify(prev) !== JSON.stringify(data)) {
+                return data;
+              }
+              return prev;
+            });
           }
         });
       }, 5000); // 5 seconds
@@ -289,7 +295,7 @@ export const MainPage: React.FC = () => {
     }
   }, [activeTab, friendsPollingActive]);
 
-  // 5-second polling for unread message counts when hearth is visible
+  // 5-second polling for unread message counts when hearth is visible - FIXED: Only when hearth is visible
   useEffect(() => {
     if (!showChat && unreadCountsPollingActive) {
       const interval = setInterval(() => {
@@ -303,9 +309,9 @@ export const MainPage: React.FC = () => {
     }
   }, [showChat, unreadCountsPollingActive, friends]);
 
-  // 30-minute polling for flame strength recalculation
+  // 30-minute polling for flame strength recalculation - FIXED: Only when hearth is visible
   useEffect(() => {
-    if (flameStrengthPollingActive) {
+    if (flameStrengthPollingActive && !showChat) {
       // Initial calculation
       recalculateFlameStrengths();
       
@@ -316,7 +322,24 @@ export const MainPage: React.FC = () => {
       
       return () => clearInterval(interval);
     }
-  }, [flameStrengthPollingActive, recalculateFlameStrengths]);
+  }, [flameStrengthPollingActive, recalculateFlameStrengths, showChat]);
+
+  // Listen for message sent events to update flame strengths
+  useEffect(() => {
+    const handleMessageSent = () => {
+      console.log('Message sent, updating flame strengths...');
+      // Delay to allow message to be processed
+      setTimeout(() => {
+        recalculateFlameStrengths();
+      }, 1000);
+    };
+
+    window.addEventListener('messageSent', handleMessageSent);
+
+    return () => {
+      window.removeEventListener('messageSent', handleMessageSent);
+    };
+  }, [recalculateFlameStrengths]);
 
   const handlePasswordChange = async () => {
     // Clear previous messages
@@ -524,6 +547,10 @@ export const MainPage: React.FC = () => {
     if (friends.length > 0) {
       loadUnreadCounts(friends);
     }
+    // Update flame strengths after closing chat
+    setTimeout(() => {
+      recalculateFlameStrengths();
+    }, 1000);
   };
 
   const incomingRequests = friendRequests.filter(req => req.request_type === 'incoming' && req.status === 'pending');
@@ -654,8 +681,8 @@ export const MainPage: React.FC = () => {
                           : 'text-ash hover:text-softwhite'
                       }`}
                     >
-                      {/* Ember particles for active tab */}
-                      {activeTab === 'profile' && Array.from({ length: 12 }).map((_, i) => (
+                      {/* Ember particles for active tab - FIXED: Only show when tab is active and not during polling */}
+                      {activeTab === 'profile' && !friendsPollingActive && Array.from({ length: 12 }).map((_, i) => (
                         <span
                           key={`profile-ember-${i}`}
                           className="absolute rounded-full pointer-events-none z-10 animate-ember"
@@ -684,8 +711,8 @@ export const MainPage: React.FC = () => {
                           : 'text-ash hover:text-softwhite'
                       }`}
                     >
-                      {/* Ember particles for active tab */}
-                      {activeTab === 'friends' && Array.from({ length: 12 }).map((_, i) => (
+                      {/* Ember particles for active tab - FIXED: Only show when tab is active and not during polling */}
+                      {activeTab === 'friends' && !friendsPollingActive && Array.from({ length: 12 }).map((_, i) => (
                         <span
                           key={`friends-ember-${i}`}
                           className="absolute rounded-full pointer-events-none z-10 animate-ember"

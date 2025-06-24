@@ -288,6 +288,9 @@ export const LiveChatBox: React.FC<LiveChatBoxProps> = ({
       console.log('Message sent successfully:', data);
       setMessage('');
       
+      // Trigger flame strength update event
+      window.dispatchEvent(new CustomEvent('messageSent'));
+      
       // Refresh chat after sending to see the sent message
       setTimeout(async () => {
         if (conversationId) {
