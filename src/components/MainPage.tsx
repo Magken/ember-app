@@ -65,8 +65,10 @@ export const MainPage: React.FC = () => {
   const [friendshipsUnsubscribe, setFriendshipsUnsubscribe] = useState<(() => void) | null>(null);
   const [conversationsUnsubscribe, setConversationsUnsubscribe] = useState<(() => void) | null>(null);
 
-  // Background polling for unread messages
+  // Background polling states
   const [backgroundPollingActive, setBackgroundPollingActive] = useState(true);
+  const [friendRequestPollingActive, setFriendRequestPollingActive] = useState(true);
+  const [periodicRefreshActive, setPeriodicRefreshActive] = useState(true);
 
   // Set nickname from profile when available
   useEffect(() => {
@@ -277,6 +279,71 @@ export const MainPage: React.FC = () => {
     };
   }, [loadFriendsData, recalculateFlameStrengths]);
 
+  // Background polling for friend requests and their status changes
+  useEffect(() => {
+    if (friendRequestPollingActive) {
+      console.log('Starting background polling for friend requests');
+      
+      const interval = setInterval(async () => {
+        try {
+          // Get current friend requests
+          const { data: currentRequests, error } = await getFriendRequests();
+          
+          if (!error && currentRequests) {
+            const previousRequestCount = friendRequests.length;
+            const currentRequestCount = currentRequests.length;
+            
+            // Check for new incoming requests
+            const newIncomingRequests = currentRequests.filter(req => 
+              req.request_type === 'incoming' && 
+              req.status === 'pending' &&
+              !friendRequests.some(existing => existing.request_id === req.request_id)
+            );
+            
+            // Check for accepted outgoing requests (new friendships)
+            const acceptedRequests = friendRequests.filter(req => 
+              req.request_type === 'outgoing' && 
+              req.status === 'pending' &&
+              !currentRequests.some(current => 
+                current.request_id === req.request_id && current.status === 'pending'
+              )
+            );
+            
+            // Update friend requests state
+            setFriendRequests(currentRequests);
+            
+            // If we have new incoming requests, show notification
+            if (newIncomingRequests.length > 0) {
+              console.log(`${newIncomingRequests.length} new friend request(s) received`);
+              setFriendsMessage({ 
+                type: 'success', 
+                message: `${newIncomingRequests.length} new friend request(s) received!` 
+              });
+            }
+            
+            // If outgoing requests were accepted, refresh hearth
+            if (acceptedRequests.length > 0) {
+              console.log(`${acceptedRequests.length} friend request(s) accepted, refreshing hearth`);
+              await loadFriendsData();
+              await recalculateFlameStrengths();
+              setFriendsMessage({ 
+                type: 'success', 
+                message: `${acceptedRequests.length} friend request(s) accepted! Hearth updated.` 
+              });
+            }
+          }
+        } catch (error) {
+          console.error('Error in friend request polling:', error);
+        }
+      }, 10000); // Poll every 10 seconds for friend requests
+      
+      return () => {
+        console.log('Stopping friend request polling');
+        clearInterval(interval);
+      };
+    }
+  }, [friendRequestPollingActive, friendRequests, loadFriendsData, recalculateFlameStrengths]);
+
   // Background polling for unread messages when chat is not open
   useEffect(() => {
     if (!showChat && backgroundPollingActive && friends.length > 0) {
@@ -320,6 +387,29 @@ export const MainPage: React.FC = () => {
       };
     }
   }, [showChat, backgroundPollingActive, friends, unreadCounts, recalculateFlameStrengths]);
+
+  // Periodic hearth refresh every 30 minutes when chat is not open
+  useEffect(() => {
+    if (!showChat && periodicRefreshActive) {
+      console.log('Starting periodic hearth refresh (30 minutes)');
+      
+      const interval = setInterval(async () => {
+        console.log('Performing periodic hearth refresh...');
+        try {
+          await loadFriendsData();
+          await recalculateFlameStrengths();
+          console.log('Periodic hearth refresh completed');
+        } catch (error) {
+          console.error('Error in periodic refresh:', error);
+        }
+      }, 30 * 60 * 1000); // 30 minutes
+      
+      return () => {
+        console.log('Stopping periodic refresh');
+        clearInterval(interval);
+      };
+    }
+  }, [showChat, periodicRefreshActive, loadFriendsData, recalculateFlameStrengths]);
 
   // Load data on component mount
   useEffect(() => {
@@ -1011,6 +1101,11 @@ export const MainPage: React.FC = () => {
                           <Heading3 className="text-lg mb-4 flex items-center gap-2">
                             <UserPlus className="w-5 h-5 text-ember" />
                             Incoming Requests
+                            {incomingRequests.length > 0 && (
+                              <span className="bg-ember text-dark text-xs px-2 py-1 rounded-full font-bold">
+                                {incomingRequests.length}
+                              </span>
+                            )}
                           </Heading3>
                           
                           <div className="space-y-3">
@@ -1063,6 +1158,11 @@ export const MainPage: React.FC = () => {
                           <Heading3 className="text-lg mb-4 flex items-center gap-2">
                             <Clock className="w-5 h-5 text-ember" />
                             Sent Requests
+                            {outgoingRequests.length > 0 && (
+                              <span className="bg-ash text-dark text-xs px-2 py-1 rounded-full font-bold">
+                                {outgoingRequests.length}
+                              </span>
+                            )}
                           </Heading3>
                           
                           <div className="space-y-3">
