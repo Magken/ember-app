@@ -25,7 +25,7 @@ import {
 } from '../lib/friends';
 import { getUserConversations, getUnreadCountForUser, messagingSubscriptionManager } from '../lib/messaging';
 import { updateProfile, changePassword, signOut, deleteAccount } from '../lib/auth';
-import { calculateFlameStrength } from '../lib/flameStrength';
+import { calculateFlameStrength, calculateFlameStrengthsBatch } from '../lib/flameStrength';
 
 interface ValidationMessage {
   type: 'success' | 'error';
@@ -125,6 +125,8 @@ export const MainPage: React.FC = () => {
       setLoading(true);
       setError(null);
 
+      console.log('Loading friends data...');
+
       // Load friends and friend requests in parallel
       const [friendsResult, requestsResult] = await Promise.all([
         getFriends(),
@@ -148,7 +150,7 @@ export const MainPage: React.FC = () => {
       setFriends(friendsData);
       setFriendRequests(requestsData);
 
-      // Convert friends to flame data for hearth
+      // Convert friends to flame data for hearth (without strength calculation yet)
       const flameData = convertFriendsToFlames(friendsData);
       setUserConnections(flameData);
 
@@ -166,6 +168,7 @@ export const MainPage: React.FC = () => {
   // Load unread message counts for friends
   const loadUnreadCounts = async (friendsList: Friend[]) => {
     try {
+      console.log('Loading unread counts for friends...');
       const counts: { [userId: string]: number } = {};
       
       // Get unread count for each friend
@@ -178,6 +181,7 @@ export const MainPage: React.FC = () => {
         })
       );
       
+      console.log('Unread counts loaded:', counts);
       setUnreadCounts(counts);
     } catch (error) {
       console.error('Error loading unread counts:', error);
@@ -197,24 +201,25 @@ export const MainPage: React.FC = () => {
         return;
       }
       
-      // For each friend, calculate the actual strength based on the formula
-      const updatedFriends = await Promise.all(
-        friendsData.map(async (friend) => {
-          try {
-            // Calculate strength using the formula
-            const strength = await calculateFlameStrength(friend.friend_id);
-            return {
-              ...friend,
-              connection_strength: strength
-            };
-          } catch (err) {
-            console.error(`Failed to calculate strength for ${friend.friend_id}:`, err);
-            return friend; // Keep original strength on error
-          }
-        })
-      );
+      if (friendsData.length === 0) {
+        console.log('No friends to calculate strengths for');
+        setUserConnections([]);
+        return;
+      }
+      
+      // Calculate strengths for all friends in batch
+      const friendIds = friendsData.map(friend => friend.friend_id);
+      const strengthResults = await calculateFlameStrengthsBatch(friendIds);
       
       // Update friends with new strengths
+      const updatedFriends = friendsData.map(friend => ({
+        ...friend,
+        connection_strength: strengthResults[friend.friend_id] || 0.1
+      }));
+      
+      console.log('Updated friends with new strengths:', updatedFriends);
+      
+      // Update friends state
       setFriends(updatedFriends);
       
       // Convert to updated flame data
@@ -297,8 +302,11 @@ export const MainPage: React.FC = () => {
 
   // Load data on component mount
   useEffect(() => {
-    loadFriendsData();
-  }, [loadFriendsData]);
+    loadFriendsData().then(() => {
+      // Calculate flame strengths after initial load
+      recalculateFlameStrengths();
+    });
+  }, [loadFriendsData, recalculateFlameStrengths]);
 
   // Listen for custom refresh events
   useEffect(() => {
@@ -312,7 +320,9 @@ export const MainPage: React.FC = () => {
     const handleFriendRequestResponded = () => {
       console.log('Friend request responded event received, refreshing...');
       if (activeTab === 'friends') {
-        loadFriendsData();
+        loadFriendsData().then(() => {
+          recalculateFlameStrengths();
+        });
       }
     };
 
@@ -323,7 +333,7 @@ export const MainPage: React.FC = () => {
       window.removeEventListener('friendRequestSent', handleFriendRequestSent);
       window.removeEventListener('friendRequestResponded', handleFriendRequestResponded);
     };
-  }, [activeTab, loadFriendsData]);
+  }, [activeTab, loadFriendsData, recalculateFlameStrengths]);
 
   // Listen for message sent events to update flame strengths
   useEffect(() => {
