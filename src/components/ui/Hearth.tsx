@@ -401,6 +401,22 @@ export const Hearth: React.FC<HearthProps> = ({
         />
       </div>
 
+      {/* Bolt Logo - Below Refresh Button */}
+      <div className="absolute top-28 left-4 z-50 pointer-events-auto">
+        <a 
+          href="https://bolt.new" 
+          target="_blank" 
+          rel="noopener noreferrer"
+          className="block hover:opacity-80 transition-opacity"
+        >
+          <img 
+            src="/logotext_poweredby_360w.png" 
+            alt="Powered by Bolt" 
+            className="h-6 w-auto"
+          />
+        </a>
+      </div>
+
       {/* Zoom Level Indicator */}
       <div className="absolute bottom-4 right-4 z-20 px-2 py-1 bg-navy/80 text-softwhite text-xs rounded border border-ember/30 pointer-events-none">
         {Math.round(zoom * 100)}%
