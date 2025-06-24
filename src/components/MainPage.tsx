@@ -1,1205 +1,956 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { useAuth } from './auth/AuthProvider';
 import { BurningPaperCard } from './ui/Card';
+import { EmberButton } from './ui/Button';
 import { IconedButton } from './ui/IconedButton';
 import { InputBox } from './ui/InputBox';
-import { PasswordInput } from './ui/PasswordInput';
-import { EmberButton } from './ui/Button';
-import { Flame } from './ui/Flame';
 import { Hearth } from './ui/Hearth';
 import { LiveChatBox } from './ui/LiveChatBox';
-import { Heading2, Heading3, TextBlock, SmallText, TinyText } from './ui/Typography';
-import { Settings, User, UserPlus, X, Clock, CheckCircle, XCircle, Copy, LogOut, Trash2, RefreshCw, AlertCircle, MessageCircle } from 'lucide-react';
-import { useAuth } from './auth/AuthProvider';
+import { Heading1, Heading2, Heading3, TextBlock, SmallText, TinyText } from './ui/Typography';
 import { 
+  Users, 
+  UserPlus, 
+  MessageCircle, 
+  Settings, 
+  LogOut, 
+  Copy, 
+  Check, 
+  AlertCircle,
+  RefreshCw,
+  X,
+  Inbox,
+  UserCheck,
+  UserX,
+  Clock
+} from 'lucide-react';
+import { 
+  getFriends, 
+  getFriendRequests, 
   sendFriendRequest, 
   respondToFriendRequest, 
-  getFriendRequests, 
-  getFriends, 
+  checkUniqueCodeExists,
   convertFriendsToFlames,
-  formatTimeAgo,
   validateUniqueCode,
-  friendsSubscriptionManager,
-  type FriendRequest,
+  formatTimeAgo,
+  useFriendRequestsSubscription,
+  useFriendshipsSubscription,
   type Friend,
+  type FriendRequest,
   type FlameData
 } from '../lib/friends';
-import { getUserConversations, getUnreadCountForUser, messagingSubscriptionManager } from '../lib/messaging';
-import { updateProfile, changePassword, signOut, deleteAccount } from '../lib/auth';
-import { calculateFlameStrength, calculateFlameStrengthsBatch } from '../lib/flameStrength';
-
-interface ValidationMessage {
-  type: 'success' | 'error';
-  message: string;
-}
+import { calculateFlameStrengthsBatch } from '../lib/flameStrength';
+import { hasUnreadMessages, getUnreadCountForUser } from '../lib/messaging';
 
 export const MainPage: React.FC = () => {
-  const { user, profile, refreshProfile } = useAuth();
-  const [showSettings, setShowSettings] = useState(false);
-  const [showChat, setShowChat] = useState(false);
-  const [selectedContact, setSelectedContact] = useState<FlameData | null>(null);
-  const [activeTab, setActiveTab] = useState<'profile' | 'friends'>('profile');
-  const [nickname, setNickname] = useState('');
-  const [currentPassword, setCurrentPassword] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [friendUsername, setFriendUsername] = useState('');
-  const [hearthDimensions, setHearthDimensions] = useState({ width: 800, height: 600 });
-  const [copySuccess, setCopySuccess] = useState(false);
-
-  // Validation messages for both tabs
-  const [profileMessage, setProfileMessage] = useState<ValidationMessage | null>(null);
-  const [friendsMessage, setFriendsMessage] = useState<ValidationMessage | null>(null);
-
-  // Friends state
-  const [friendRequests, setFriendRequests] = useState<FriendRequest[]>([]);
+  const { user, profile, signOut } = useAuth();
+  const [activeSection, setActiveSection] = useState<'hearth' | 'friends' | 'requests' | 'settings'>('hearth');
   const [friends, setFriends] = useState<Friend[]>([]);
-  const [userConnections, setUserConnections] = useState<FlameData[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [friendRequests, setFriendRequests] = useState<FriendRequest[]>([]);
+  const [flames, setFlames] = useState<FlameData[]>([]);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
-  // Unread messages state
+  const [copiedCode, setCopiedCode] = useState(false);
+  const [selectedChat, setSelectedChat] = useState<string | null>(null);
+  const [hasUnread, setHasUnread] = useState(false);
+  const [totalUnread, setTotalUnread] = useState(0);
   const [unreadCounts, setUnreadCounts] = useState<{ [userId: string]: number }>({});
+  
+  // Add friend form state
+  const [showAddFriend, setShowAddFriend] = useState(false);
+  const [friendCode, setFriendCode] = useState('');
+  const [friendMessage, setFriendMessage] = useState('');
+  const [addFriendLoading, setAddFriendLoading] = useState(false);
+  const [addFriendError, setAddFriendError] = useState<string | null>(null);
+  const [addFriendSuccess, setAddFriendSuccess] = useState<string | null>(null);
 
-  // Real-time subscription cleanup functions
-  const [friendRequestsUnsubscribe, setFriendRequestsUnsubscribe] = useState<(() => void) | null>(null);
-  const [friendshipsUnsubscribe, setFriendshipsUnsubscribe] = useState<(() => void) | null>(null);
-  const [conversationsUnsubscribe, setConversationsUnsubscribe] = useState<(() => void) | null>(null);
+  // Polling intervals
+  const hearthPollingRef = useRef<NodeJS.Timeout | null>(null);
+  const requestsPollingRef = useRef<NodeJS.Timeout | null>(null);
+  const unreadPollingRef = useRef<NodeJS.Timeout | null>(null);
+  const periodicRefreshRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Background polling states
-  const [backgroundPollingActive, setBackgroundPollingActive] = useState(true);
-  const [friendRequestPollingActive, setFriendRequestPollingActive] = useState(true);
-  const [periodicRefreshActive, setPeriodicRefreshActive] = useState(true);
+  // Real-time subscriptions
+  const friendRequestsSubscription = useFriendRequestsSubscription(() => {
+    console.log('Friend requests changed, refreshing...');
+    loadFriendRequests();
+  });
 
-  // Set nickname from profile when available
-  useEffect(() => {
-    if (profile?.nickname) {
-      setNickname(profile.nickname);
-    }
-  }, [profile]);
+  const friendshipsSubscription = useFriendshipsSubscription(() => {
+    console.log('Friendships changed, refreshing hearth...');
+    loadFriendsAndFlames();
+  });
 
-  // Clear messages when switching tabs
-  useEffect(() => {
-    setProfileMessage(null);
-    setFriendsMessage(null);
-  }, [activeTab]);
-
-  // Auto-clear messages after 5 seconds
-  useEffect(() => {
-    if (profileMessage) {
-      const timer = setTimeout(() => setProfileMessage(null), 5000);
-      return () => clearTimeout(timer);
-    }
-  }, [profileMessage]);
-
-  useEffect(() => {
-    if (friendsMessage) {
-      const timer = setTimeout(() => setFriendsMessage(null), 5000);
-      return () => clearTimeout(timer);
-    }
-  }, [friendsMessage]);
-
-  // Update hearth dimensions based on window size with reduced minimum sizes (20% smaller)
-  useEffect(() => {
-    const updateDimensions = () => {
-      const padding = 32; // Total horizontal padding
-      const headerHeight = 88; // Header height
-      const bottomPadding = 32; // Bottom padding
-      
-      const availableWidth = window.innerWidth - padding;
-      const availableHeight = window.innerHeight - headerHeight - bottomPadding;
-      
-      setHearthDimensions({
-        width: Math.max(320, availableWidth), // Reduced from 400px to 320px (20% smaller)
-        height: Math.max(240, availableHeight) // Reduced from 300px to 240px (20% smaller)
-      });
-    };
-
-    // Initial calculation
-    updateDimensions();
-
-    // Add resize listener
-    window.addEventListener('resize', updateDimensions);
-
-    // Cleanup
-    return () => window.removeEventListener('resize', updateDimensions);
-  }, []);
-
-  // Load friends and friend requests
-  const loadFriendsData = useCallback(async () => {
+  // Load friends and calculate flame strengths
+  const loadFriendsAndFlames = async () => {
     try {
-      setLoading(true);
-      setError(null);
-
-      console.log('Loading friends data...');
-
-      // Load friends and friend requests in parallel
-      const [friendsResult, requestsResult] = await Promise.all([
-        getFriends(),
-        getFriendRequests()
-      ]);
-
-      if (friendsResult.error) {
-        throw new Error(friendsResult.error.message || 'Failed to load friends');
+      console.log('Loading friends and flames...');
+      const { data: friendsData, error: friendsError } = await getFriends();
+      
+      if (friendsError) {
+        throw friendsError;
       }
 
-      if (requestsResult.error) {
-        throw new Error(requestsResult.error.message || 'Failed to load friend requests');
+      if (friendsData && friendsData.length > 0) {
+        console.log('Friends loaded:', friendsData.length);
+        setFriends(friendsData);
+
+        // Calculate flame strengths in batch
+        const friendIds = friendsData.map(friend => friend.friend_id);
+        const strengths = await calculateFlameStrengthsBatch(friendIds);
+        
+        // Update friends with calculated strengths
+        const friendsWithStrengths = friendsData.map(friend => ({
+          ...friend,
+          connection_strength: strengths[friend.friend_id] || 0.1
+        }));
+
+        // Convert to flames with unread indicators
+        const flamesData = convertFriendsToFlames(friendsWithStrengths);
+        
+        // Add unread message indicators
+        const flamesWithUnread = await Promise.all(
+          flamesData.map(async (flame) => {
+            const unreadCount = await getUnreadCountForUser(flame.id);
+            return {
+              ...flame,
+              hasUnreadMessages: unreadCount > 0,
+              unreadCount
+            };
+          })
+        );
+        
+        setFlames(flamesWithUnread);
+        console.log('Flames updated with strengths and unread counts');
+      } else {
+        console.log('No friends found');
+        setFriends([]);
+        setFlames([]);
       }
-
-      const friendsData = friendsResult.data || [];
-      const requestsData = requestsResult.data || [];
-
-      console.log('Loaded friends:', friendsData.length);
-      console.log('Loaded requests:', requestsData.length);
-
-      setFriends(friendsData);
-      setFriendRequests(requestsData);
-
-      // Load unread message counts for each friend
-      await loadUnreadCounts(friendsData);
-
     } catch (err: any) {
-      console.error('Error loading friends data:', err);
-      setError(err.message || 'Failed to load friends data');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  // Load unread message counts for friends
-  const loadUnreadCounts = async (friendsList: Friend[]) => {
-    try {
-      console.log('Loading unread counts for friends...');
-      const counts: { [userId: string]: number } = {};
-      
-      // Get unread count for each friend
-      await Promise.all(
-        friendsList.map(async (friend) => {
-          const count = await getUnreadCountForUser(friend.friend_id);
-          if (count > 0) {
-            counts[friend.friend_id] = count;
-          }
-        })
-      );
-      
-      console.log('Unread counts loaded:', counts);
-      setUnreadCounts(counts);
-    } catch (error) {
-      console.error('Error loading unread counts:', error);
+      console.error('Error loading friends and flames:', err);
+      setError(err.message || 'Failed to load friends');
     }
   };
 
-  // Recalculate flame strengths and update display - no loading screen
-  const recalculateFlameStrengths = useCallback(async () => {
+  // Load friend requests
+  const loadFriendRequests = async () => {
     try {
-      console.log('Recalculating flame strengths silently...');
+      console.log('Loading friend requests...');
+      const { data: requestsData, error: requestsError } = await getFriendRequests();
       
-      // Get the latest friends data
-      const { data: friendsData, error } = await getFriends();
-      
-      if (error || !friendsData) {
-        console.error('Failed to get friends for strength calculation:', error);
-        return;
+      if (requestsError) {
+        throw requestsError;
       }
-      
-      if (friendsData.length === 0) {
-        console.log('No friends to calculate strengths for');
-        setUserConnections([]);
-        return;
-      }
-      
-      // Calculate strengths for all friends in batch
-      const friendIds = friendsData.map(friend => friend.friend_id);
-      const strengthResults = await calculateFlameStrengthsBatch(friendIds);
-      
-      // Update friends with new strengths
-      const updatedFriends = friendsData.map(friend => ({
-        ...friend,
-        connection_strength: strengthResults[friend.friend_id] || 0.1
-      }));
-      
-      console.log('Updated friends with new strengths:', updatedFriends);
-      
-      // Update friends state
-      setFriends(updatedFriends);
-      
-      // Convert to updated flame data and display
-      const updatedFlameData = convertFriendsToFlames(updatedFriends);
-      setUserConnections(updatedFlameData);
-      
-      console.log('Flame strengths recalculated successfully');
-    } catch (error) {
-      console.error('Error recalculating flame strengths:', error);
+
+      setFriendRequests(requestsData || []);
+      console.log('Friend requests loaded:', requestsData?.length || 0);
+    } catch (err: any) {
+      console.error('Error loading friend requests:', err);
+      setError(err.message || 'Failed to load friend requests');
     }
+  };
+
+  // Check for unread messages
+  const checkUnreadMessages = async () => {
+    try {
+      const { hasUnread: hasUnreadMessages, totalUnread: totalUnreadCount } = await hasUnreadMessages();
+      setHasUnread(hasUnreadMessages);
+      setTotalUnread(totalUnreadCount);
+
+      // Update individual unread counts for each friend
+      const counts: { [userId: string]: number } = {};
+      for (const friend of friends) {
+        const count = await getUnreadCountForUser(friend.friend_id);
+        counts[friend.friend_id] = count;
+      }
+      setUnreadCounts(counts);
+    } catch (error) {
+      console.error('Error checking unread messages:', error);
+    }
+  };
+
+  // Initial load
+  useEffect(() => {
+    const loadData = async () => {
+      setLoading(true);
+      setError(null);
+      
+      try {
+        await Promise.all([
+          loadFriendsAndFlames(),
+          loadFriendRequests(),
+          checkUnreadMessages()
+        ]);
+      } catch (err: any) {
+        console.error('Error loading initial data:', err);
+        setError(err.message || 'Failed to load data');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadData();
   }, []);
 
-  // Set up real-time subscriptions for friend requests
+  // Set up polling for unread messages (every 5 seconds)
   useEffect(() => {
-    if (activeTab === 'friends') {
-      console.log('Setting up friend requests real-time subscription');
-      
-      const unsubscribe = friendsSubscriptionManager.subscribe('friend_requests', () => {
-        console.log('Friend requests updated via real-time subscription');
-        // Reload friend requests data
-        getFriendRequests().then(({ data, error }) => {
-          if (!error && data) {
-            setFriendRequests(data);
-          }
-        });
-      });
-      
-      setFriendRequestsUnsubscribe(() => unsubscribe);
-      
-      return () => {
-        console.log('Cleaning up friend requests subscription');
-        unsubscribe();
-        setFriendRequestsUnsubscribe(null);
-      };
+    if (unreadPollingRef.current) {
+      clearInterval(unreadPollingRef.current);
     }
-  }, [activeTab]);
 
-  // Set up real-time subscriptions for friendships
-  useEffect(() => {
-    console.log('Setting up friendships real-time subscription');
-    
-    const unsubscribe = friendsSubscriptionManager.subscribe('friendships', () => {
-      console.log('Friendships updated via real-time subscription');
-      // Reload friends data and recalculate flame strengths
-      loadFriendsData().then(() => {
-        recalculateFlameStrengths();
-      });
-    });
-    
-    setFriendshipsUnsubscribe(() => unsubscribe);
-    
+    unreadPollingRef.current = setInterval(() => {
+      if (!selectedChat) { // Only poll when no chat is open
+        checkUnreadMessages();
+      }
+    }, 5000);
+
     return () => {
-      console.log('Cleaning up friendships subscription');
-      unsubscribe();
-      setFriendshipsUnsubscribe(null);
+      if (unreadPollingRef.current) {
+        clearInterval(unreadPollingRef.current);
+      }
     };
-  }, [loadFriendsData, recalculateFlameStrengths]);
+  }, [selectedChat, friends]);
 
-  // Background polling for friend requests and their status changes
+  // Set up polling for hearth refresh when new unread messages are detected
   useEffect(() => {
-    if (friendRequestPollingActive) {
-      console.log('Starting background polling for friend requests');
-      
-      const interval = setInterval(async () => {
-        try {
-          // Get current friend requests
-          const { data: currentRequests, error } = await getFriendRequests();
-          
-          if (!error && currentRequests) {
-            const previousRequestCount = friendRequests.length;
-            const currentRequestCount = currentRequests.length;
-            
-            // Check for new incoming requests
-            const newIncomingRequests = currentRequests.filter(req => 
-              req.request_type === 'incoming' && 
-              req.status === 'pending' &&
-              !friendRequests.some(existing => existing.request_id === req.request_id)
-            );
-            
-            // Check for accepted outgoing requests (new friendships)
-            const acceptedRequests = friendRequests.filter(req => 
-              req.request_type === 'outgoing' && 
-              req.status === 'pending' &&
-              !currentRequests.some(current => 
-                current.request_id === req.request_id && current.status === 'pending'
-              )
-            );
-            
-            // Update friend requests state
-            setFriendRequests(currentRequests);
-            
-            // If we have new incoming requests, show notification
-            if (newIncomingRequests.length > 0) {
-              console.log(`${newIncomingRequests.length} new friend request(s) received`);
-              setFriendsMessage({ 
-                type: 'success', 
-                message: `${newIncomingRequests.length} new friend request(s) received!` 
-              });
-            }
-            
-            // If outgoing requests were accepted, refresh hearth
-            if (acceptedRequests.length > 0) {
-              console.log(`${acceptedRequests.length} friend request(s) accepted, refreshing hearth`);
-              await loadFriendsData();
-              await recalculateFlameStrengths();
-              setFriendsMessage({ 
-                type: 'success', 
-                message: `${acceptedRequests.length} friend request(s) accepted! Hearth updated.` 
-              });
-            }
-          }
-        } catch (error) {
-          console.error('Error in friend request polling:', error);
-        }
-      }, 10000); // Poll every 10 seconds for friend requests
-      
-      return () => {
-        console.log('Stopping friend request polling');
-        clearInterval(interval);
-      };
+    if (hearthPollingRef.current) {
+      clearInterval(hearthPollingRef.current);
     }
-  }, [friendRequestPollingActive, friendRequests, loadFriendsData, recalculateFlameStrengths]);
 
-  // Background polling for unread messages when chat is not open
-  useEffect(() => {
-    if (!showChat && backgroundPollingActive && friends.length > 0) {
-      console.log('Starting background polling for unread messages');
-      
-      const interval = setInterval(async () => {
-        try {
-          // Check for new unread messages
-          const newUnreadCounts: { [userId: string]: number } = {};
-          let hasNewUnread = false;
-          
-          await Promise.all(
-            friends.map(async (friend) => {
-              const count = await getUnreadCountForUser(friend.friend_id);
-              if (count > 0) {
-                newUnreadCounts[friend.friend_id] = count;
-                // Check if this is a new unread message
-                if (count > (unreadCounts[friend.friend_id] || 0)) {
-                  hasNewUnread = true;
-                }
-              }
-            })
-          );
-          
-          // Update unread counts
-          setUnreadCounts(newUnreadCounts);
-          
-          // If there are new unread messages, recalculate flame strengths
-          if (hasNewUnread) {
-            console.log('New unread messages detected, updating flame strengths');
-            recalculateFlameStrengths();
-          }
-        } catch (error) {
-          console.error('Error in background polling:', error);
+    hearthPollingRef.current = setInterval(async () => {
+      if (!selectedChat) { // Only refresh when no chat is open
+        const { hasUnread: currentHasUnread } = await hasUnreadMessages();
+        if (currentHasUnread && !hasUnread) {
+          console.log('New unread messages detected, refreshing hearth...');
+          loadFriendsAndFlames();
         }
-      }, 5000); // Poll every 5 seconds
-      
-      return () => {
-        console.log('Stopping background polling');
-        clearInterval(interval);
-      };
-    }
-  }, [showChat, backgroundPollingActive, friends, unreadCounts, recalculateFlameStrengths]);
+      }
+    }, 3000);
 
-  // Periodic hearth refresh every 30 minutes when chat is not open
+    return () => {
+      if (hearthPollingRef.current) {
+        clearInterval(hearthPollingRef.current);
+      }
+    };
+  }, [selectedChat, hasUnread]);
+
+  // Set up polling for friend requests (every 10 seconds)
   useEffect(() => {
-    if (!showChat && periodicRefreshActive) {
-      console.log('Starting periodic hearth refresh (30 minutes)');
-      
-      const interval = setInterval(async () => {
-        console.log('Performing periodic hearth refresh...');
-        try {
-          await loadFriendsData();
-          await recalculateFlameStrengths();
-          console.log('Periodic hearth refresh completed');
-        } catch (error) {
-          console.error('Error in periodic refresh:', error);
-        }
-      }, 30 * 60 * 1000); // 30 minutes
-      
-      return () => {
-        console.log('Stopping periodic refresh');
-        clearInterval(interval);
-      };
+    if (requestsPollingRef.current) {
+      clearInterval(requestsPollingRef.current);
     }
-  }, [showChat, periodicRefreshActive, loadFriendsData, recalculateFlameStrengths]);
 
-  // Load data on component mount
+    requestsPollingRef.current = setInterval(() => {
+      loadFriendRequests();
+    }, 10000);
+
+    return () => {
+      if (requestsPollingRef.current) {
+        clearInterval(requestsPollingRef.current);
+      }
+    };
+  }, []);
+
+  // Set up periodic hearth refresh (every 30 minutes when no chat is open)
   useEffect(() => {
-    loadFriendsData().then(() => {
-      // Calculate flame strengths after initial load
-      recalculateFlameStrengths();
-    });
-  }, [loadFriendsData, recalculateFlameStrengths]);
+    if (periodicRefreshRef.current) {
+      clearInterval(periodicRefreshRef.current);
+    }
 
-  // Listen for custom refresh events
+    periodicRefreshRef.current = setInterval(() => {
+      if (!selectedChat) {
+        console.log('Periodic hearth refresh (30 min)...');
+        loadFriendsAndFlames();
+      }
+    }, 30 * 60 * 1000); // 30 minutes
+
+    return () => {
+      if (periodicRefreshRef.current) {
+        clearInterval(periodicRefreshRef.current);
+      }
+    };
+  }, [selectedChat]);
+
+  // Set up real-time subscriptions
+  useEffect(() => {
+    const unsubscribeRequests = friendRequestsSubscription.subscribe();
+    const unsubscribeFriendships = friendshipsSubscription.subscribe();
+
+    return () => {
+      unsubscribeRequests();
+      unsubscribeFriendships();
+    };
+  }, []);
+
+  // Listen for custom events
   useEffect(() => {
     const handleFriendRequestSent = () => {
-      console.log('Friend request sent event received, refreshing...');
-      if (activeTab === 'friends') {
-        loadFriendsData();
+      console.log('Friend request sent event received');
+      loadFriendRequests();
+    };
+
+    const handleFriendRequestResponded = (event: CustomEvent) => {
+      console.log('Friend request responded event received:', event.detail);
+      loadFriendRequests();
+      if (event.detail.accepted) {
+        loadFriendsAndFlames();
       }
     };
 
-    const handleFriendRequestResponded = () => {
-      console.log('Friend request responded event received, refreshing...');
-      if (activeTab === 'friends') {
-        loadFriendsData().then(() => {
-          recalculateFlameStrengths();
-        });
-      }
+    const handleMessageSent = () => {
+      console.log('Message sent event received');
+      loadFriendsAndFlames(); // Refresh to update flame strengths
     };
 
     window.addEventListener('friendRequestSent', handleFriendRequestSent);
-    window.addEventListener('friendRequestResponded', handleFriendRequestResponded);
-
-    return () => {
-      window.removeEventListener('friendRequestSent', handleFriendRequestSent);
-      window.removeEventListener('friendRequestResponded', handleFriendRequestResponded);
-    };
-  }, [activeTab, loadFriendsData, recalculateFlameStrengths]);
-
-  // Listen for message sent events to update flame strengths
-  useEffect(() => {
-    const handleMessageSent = () => {
-      console.log('Message sent, updating flame strengths...');
-      // Delay to allow message to be processed
-      setTimeout(() => {
-        recalculateFlameStrengths();
-      }, 1000);
-    };
-
+    window.addEventListener('friendRequestResponded', handleFriendRequestResponded as EventListener);
     window.addEventListener('messageSent', handleMessageSent);
 
     return () => {
+      window.removeEventListener('friendRequestSent', handleFriendRequestSent);
+      window.removeEventListener('friendRequestResponded', handleFriendRequestResponded as EventListener);
       window.removeEventListener('messageSent', handleMessageSent);
     };
-  }, [recalculateFlameStrengths]);
+  }, []);
 
-  // Cleanup all subscriptions on unmount
+  // Cleanup polling on unmount
   useEffect(() => {
     return () => {
-      if (friendRequestsUnsubscribe) {
-        friendRequestsUnsubscribe();
-      }
-      if (friendshipsUnsubscribe) {
-        friendshipsUnsubscribe();
-      }
-      if (conversationsUnsubscribe) {
-        conversationsUnsubscribe();
-      }
+      if (hearthPollingRef.current) clearInterval(hearthPollingRef.current);
+      if (requestsPollingRef.current) clearInterval(requestsPollingRef.current);
+      if (unreadPollingRef.current) clearInterval(unreadPollingRef.current);
+      if (periodicRefreshRef.current) clearInterval(periodicRefreshRef.current);
+      friendRequestsSubscription.cleanup();
+      friendshipsSubscription.cleanup();
     };
-  }, [friendRequestsUnsubscribe, friendshipsUnsubscribe, conversationsUnsubscribe]);
+  }, []);
 
-  const handlePasswordChange = async () => {
-    // Clear previous messages
-    setProfileMessage(null);
-
-    if (!currentPassword || !newPassword || !confirmPassword) {
-      setProfileMessage({ type: 'error', message: 'Please fill in all password fields' });
-      return;
-    }
-    if (newPassword !== confirmPassword) {
-      setProfileMessage({ type: 'error', message: 'New passwords do not match' });
-      return;
-    }
-    if (newPassword.length < 8) {
-      setProfileMessage({ type: 'error', message: 'Password must be at least 8 characters long' });
-      return;
-    }
-    
-    try {
-      const { error } = await changePassword(currentPassword, newPassword);
-      if (error) {
-        throw error;
-      }
-      
-      setProfileMessage({ type: 'success', message: 'Password changed successfully!' });
-      setCurrentPassword('');
-      setNewPassword('');
-      setConfirmPassword('');
-    } catch (error: any) {
-      setProfileMessage({ type: 'error', message: error.message || 'Failed to change password' });
-    }
-  };
-
-  const handleAddFriend = async () => {
-    // Clear previous messages
-    setFriendsMessage(null);
-
-    if (!friendUsername.trim()) {
-      setFriendsMessage({ type: 'error', message: 'Please enter a username or unique code' });
-      return;
-    }
-    
-    // Validate unique code format
-    if (!validateUniqueCode(friendUsername.trim())) {
-      setFriendsMessage({ type: 'error', message: 'Please enter a valid unique code (format: EMBR-XXXXXXXX)' });
-      return;
-    }
-
-    setLoading(true);
-    setError(null);
-
-    try {
-      const { data, error } = await sendFriendRequest(friendUsername.trim());
-      
-      if (error) {
-        throw error;
-      }
-
-      if (data?.success) {
-        setFriendsMessage({ type: 'success', message: `Friend request sent to ${friendUsername}!` });
-        setFriendUsername('');
-        // The real-time subscription will handle the refresh automatically
-      } else {
-        throw new Error(data?.error || 'Failed to send friend request');
-      }
-    } catch (error: any) {
-      console.error('Add friend error:', error);
-      setFriendsMessage({ type: 'error', message: error.message || 'Failed to send friend request' });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleSaveProfile = async () => {
-    // Clear previous messages
-    setProfileMessage(null);
-
-    if (!nickname.trim()) {
-      setProfileMessage({ type: 'error', message: 'Nickname cannot be empty' });
-      return;
-    }
-    
-    try {
-      const { error } = await updateProfile({ nickname: nickname.trim() });
-      if (error) {
-        throw error;
-      }
-      
-      // Refresh the profile to get updated data
-      await refreshProfile();
-      
-      setProfileMessage({ type: 'success', message: 'Profile updated successfully!' });
-    } catch (error: any) {
-      setProfileMessage({ type: 'error', message: error.message || 'Failed to update profile' });
-    }
-  };
-
-  const handleAcceptRequest = async (requestId: string) => {
-    setLoading(true);
-    setFriendsMessage(null);
-
-    try {
-      const { data, error } = await respondToFriendRequest(requestId, 'accepted');
-      
-      if (error) {
-        throw error;
-      }
-
-      if (data?.success) {
-        setFriendsMessage({ type: 'success', message: 'Friend request accepted successfully!' });
-        // The real-time subscription will handle the refresh automatically
-        console.log('Friend request accepted successfully');
-      } else {
-        throw new Error(data?.error || 'Failed to accept friend request');
-      }
-    } catch (error: any) {
-      console.error('Accept request error:', error);
-      setFriendsMessage({ type: 'error', message: error.message || 'Failed to accept friend request' });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleDeclineRequest = async (requestId: string) => {
-    setLoading(true);
-    setFriendsMessage(null);
-
-    try {
-      const { data, error } = await respondToFriendRequest(requestId, 'declined');
-      
-      if (error) {
-        throw error;
-      }
-
-      if (data?.success) {
-        setFriendsMessage({ type: 'success', message: 'Friend request declined successfully' });
-        // The real-time subscription will handle the refresh automatically
-        console.log('Friend request declined successfully');
-      } else {
-        throw new Error(data?.error || 'Failed to decline friend request');
-      }
-    } catch (error: any) {
-      console.error('Decline request error:', error);
-      setFriendsMessage({ type: 'error', message: error.message || 'Failed to decline friend request' });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const copyUniqueCode = () => {
-    const codeToShare = profile?.unique_code || 'EMBR-XXXXXXXX';
-    navigator.clipboard.writeText(codeToShare).then(() => {
-      setCopySuccess(true);
-      setProfileMessage({ type: 'success', message: 'Unique code copied to clipboard!' });
-      setTimeout(() => setCopySuccess(false), 3000);
-    }).catch(() => {
-      setProfileMessage({ type: 'error', message: 'Failed to copy code. Please copy manually: ' + codeToShare });
-    });
-  };
-
-  const handleLogout = async () => {
-    setProfileMessage(null);
-
-    if (confirm('Are you sure you want to log out?')) {
+  const handleCopyCode = async () => {
+    if (profile?.unique_code) {
       try {
-        await signOut();
-        setProfileMessage({ type: 'success', message: 'Logged out successfully!' });
-      } catch (error: any) {
-        console.error('Logout error:', error);
-        setProfileMessage({ type: 'error', message: 'Logout failed, forcing reload...' });
-        // Force reload as fallback
-        setTimeout(() => window.location.reload(), 1000);
+        await navigator.clipboard.writeText(profile.unique_code);
+        setCopiedCode(true);
+        setTimeout(() => setCopiedCode(false), 2000);
+      } catch (err) {
+        console.error('Failed to copy code:', err);
       }
     }
   };
 
-  const handleDeleteAccount = async () => {
-    setProfileMessage(null);
+  const handleAddFriend = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAddFriendLoading(true);
+    setAddFriendError(null);
+    setAddFriendSuccess(null);
 
-    if (confirm('Are you sure you want to delete your account? This action cannot be undone.')) {
-      if (confirm('This will permanently delete all your data and connections. Are you absolutely sure?')) {
-        try {
-          await deleteAccount();
-          setProfileMessage({ type: 'success', message: 'Account deletion initiated.' });
-        } catch (error: any) {
-          setProfileMessage({ type: 'error', message: error.message || 'Failed to delete account' });
-        }
+    try {
+      // Validate format
+      if (!validateUniqueCode(friendCode)) {
+        throw new Error('Invalid unique code format. Must be EMBR-XXXXXXXX');
       }
+
+      // Check if code exists and can be added
+      const { data: checkData, error: checkError } = await checkUniqueCodeExists(friendCode);
+      
+      if (checkError) {
+        throw checkError;
+      }
+
+      if (!checkData?.exists) {
+        throw new Error('No user found with that unique code');
+      }
+
+      if (!checkData?.can_add) {
+        throw new Error(checkData?.reason || 'Cannot add this user');
+      }
+
+      // Send friend request
+      const { data, error } = await sendFriendRequest(friendCode, friendMessage);
+      
+      if (error) {
+        throw error;
+      }
+
+      setAddFriendSuccess('Friend request sent successfully!');
+      setFriendCode('');
+      setFriendMessage('');
+      setShowAddFriend(false);
+      
+      // Refresh friend requests
+      loadFriendRequests();
+    } catch (err: any) {
+      setAddFriendError(err.message || 'Failed to send friend request');
+    } finally {
+      setAddFriendLoading(false);
+    }
+  };
+
+  const handleRespondToRequest = async (requestId: string, response: 'accepted' | 'declined') => {
+    try {
+      const { data, error } = await respondToFriendRequest(requestId, response);
+      
+      if (error) {
+        throw error;
+      }
+
+      // Refresh data
+      loadFriendRequests();
+      if (response === 'accepted') {
+        loadFriendsAndFlames();
+      }
+    } catch (err: any) {
+      console.error('Error responding to friend request:', err);
+      setError(err.message || 'Failed to respond to friend request');
     }
   };
 
   const handleFlameClick = (flameId: string) => {
-    const connection = userConnections.find(c => c.id === flameId);
-    if (connection) {
-      setSelectedContact(connection);
-      setShowChat(true);
-      console.log(`Opening chat with ${connection.name}`);
-    }
+    console.log('Flame clicked:', flameId);
+    setSelectedChat(flameId);
   };
 
   const handleCloseChat = () => {
-    setShowChat(false);
-    setSelectedContact(null);
-    // Refresh unread counts when closing chat
-    if (friends.length > 0) {
-      loadUnreadCounts(friends);
-    }
-    // Update flame strengths after closing chat
-    setTimeout(() => {
-      recalculateFlameStrengths();
-    }, 1000);
+    setSelectedChat(null);
+    // Refresh hearth when chat is closed to update flame strengths
+    loadFriendsAndFlames();
+    checkUnreadMessages();
   };
 
-  // Enhanced refresh function that recalculates flame strengths
-  const handleRefresh = async () => {
-    console.log('Manual refresh triggered - recalculating flame strengths');
-    setLoading(true);
-    
-    try {
-      // First load the basic data
-      await loadFriendsData();
-      // Then recalculate flame strengths with current data
-      await recalculateFlameStrengths();
-    } catch (error) {
-      console.error('Error during manual refresh:', error);
-    } finally {
-      setLoading(false);
-    }
+  const getSelectedFriend = () => {
+    return friends.find(friend => friend.friend_id === selectedChat);
   };
 
-  const incomingRequests = friendRequests.filter(req => req.request_type === 'incoming' && req.status === 'pending');
-  const outgoingRequests = friendRequests.filter(req => req.request_type === 'outgoing' && req.status === 'pending');
+  // Get counts for badges
+  const incomingRequestsCount = friendRequests.filter(req => req.request_type === 'incoming' && req.status === 'pending').length;
+  const outgoingRequestsCount = friendRequests.filter(req => req.request_type === 'outgoing' && req.status === 'pending').length;
 
-  // User's nickname from profile or fallback
-  const userNickname = profile?.nickname || nickname || 'User';
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[var(--color-dark)] text-[var(--color-white)] flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-16 h-16 bg-ember rounded-full mx-auto animate-pulse mb-4" />
+          <SmallText className="text-ash">Loading your hearth...</SmallText>
+        </div>
+      </div>
+    );
+  }
 
-  // Enhanced user connections with unread indicators
-  const enhancedUserConnections = userConnections.map(connection => ({
-    ...connection,
-    hasUnreadMessages: (unreadCounts[connection.id] || 0) > 0,
-    unreadCount: unreadCounts[connection.id] || 0
-  }));
+  if (selectedChat) {
+    const selectedFriend = getSelectedFriend();
+    if (!selectedFriend) {
+      setSelectedChat(null);
+      return null;
+    }
+
+    return (
+      <div className="min-h-screen bg-[var(--color-dark)] text-[var(--color-white)]">
+        {/* Bolt Logo */}
+        <div className="fixed top-4 left-4 z-50">
+          <a href="https://bolt.new" target="_blank" rel="noopener noreferrer">
+            <img 
+              src="/logotext_poweredby_360w.png" 
+              alt="Powered by Bolt" 
+              className="h-8 opacity-80 hover:opacity-100 transition-opacity"
+            />
+          </a>
+        </div>
+
+        <div className="w-full h-screen">
+          <LiveChatBox
+            contactUserId={selectedFriend.friend_id}
+            contactName={selectedFriend.friend_nickname}
+            connectionStrength={selectedFriend.connection_strength}
+            onClose={handleCloseChat}
+            height={window.innerHeight}
+          />
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-black text-white relative">
-      {/* Enable scrolling for smaller screens */}
-      <div className="min-h-screen overflow-auto">
-        {/* Header Section - Fixed at top */}
-        <header className="fixed top-0 left-0 right-0 z-40 bg-black/80 backdrop-blur-sm">
-          <div className="flex items-center justify-between px-6 py-4">
-            {/* Left side - empty for balance */}
-            <div className="w-12"></div>
-            
-            {/* Center - User's Hearth Title and Flame */}
-            <div className="flex items-center gap-3">
-              <Flame strength={0.8} size={32} animated={true} interactive={true} />
-              <SmallText className="bg-gradient-to-r from-ember via-carmine to-ember bg-clip-text text-transparent font-medium text-lg whitespace-nowrap">
-                {userNickname}'s Hearth
-              </SmallText>
-            </div>
-            
-            {/* Right side - Settings Button */}
-            <div className="flex justify-end">
-              <IconedButton
-                icon={<Settings className="w-5 h-5" />}
-                label="Settings"
-                size="md"
-                onClick={() => setShowSettings(true)}
-              />
-            </div>
-          </div>
-        </header>
+    <div className="min-h-screen bg-[var(--color-dark)] text-[var(--color-white)]">
+      {/* Bolt Logo */}
+      <div className="fixed top-4 left-4 z-50">
+        <a href="https://bolt.new" target="_blank" rel="noopener noreferrer">
+          <img 
+            src="/logotext_poweredby_360w.png" 
+            alt="Powered by Bolt" 
+            className="h-8 opacity-80 hover:opacity-100 transition-opacity"
+          />
+        </a>
+      </div>
 
-        {/* Main Content - Hearth Display or Chat */}
-        <main className="pt-20 min-h-screen">
-          {showChat && selectedContact ? (
-            /* Live Chat Interface - Full Screen */
-            <div className="w-full h-screen pt-4 px-4 pb-4">
-              <div className="w-full h-full max-w-4xl mx-auto">
-                <LiveChatBox
-                  contactUserId={selectedContact.id}
-                  contactName={selectedContact.name || 'Unknown'}
-                  connectionStrength={selectedContact.strength}
-                  onClose={handleCloseChat}
-                  height={window.innerHeight - 120} // Account for header and padding
+      <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        
+        {/* Header */}
+        <div className="flex items-center justify-between mb-8">
+          <div>
+            <Heading1 className="text-3xl bg-gradient-to-r from-ember to-carmine bg-clip-text text-transparent">
+              Your Hearth
+            </Heading1>
+            <TextBlock className="text-ash mt-2">
+              Welcome back, {profile?.nickname}
+            </TextBlock>
+          </div>
+          
+          <div className="flex items-center gap-4">
+            {/* Unread messages indicator */}
+            {hasUnread && (
+              <div className="flex items-center gap-2 px-3 py-2 bg-ember/20 border border-ember/50 rounded-soft">
+                <Inbox className="w-4 h-4 text-ember" />
+                <SmallText className="text-ember font-medium">
+                  {totalUnread} unread message{totalUnread !== 1 ? 's' : ''}
+                </SmallText>
+              </div>
+            )}
+            
+            <IconedButton
+              icon={<LogOut className="w-4 h-4" />}
+              label="Sign Out"
+              onClick={signOut}
+              variant="ghost"
+              size="sm"
+            />
+          </div>
+        </div>
+
+        {/* Error Display */}
+        {error && (
+          <div className="mb-6 p-4 bg-carmine/20 border border-carmine/50 rounded-soft flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 text-carmine flex-shrink-0 mt-0.5" />
+            <div>
+              <SmallText className="text-carmine font-medium">Error</SmallText>
+              <SmallText className="text-carmine">{error}</SmallText>
+            </div>
+            <button
+              onClick={() => setError(null)}
+              className="ml-auto text-carmine hover:text-carmine/80"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+
+        {/* Success Display */}
+        {addFriendSuccess && (
+          <div className="mb-6 p-4 bg-green-500/20 border border-green-500/50 rounded-soft flex items-start gap-3">
+            <Check className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" />
+            <div>
+              <SmallText className="text-green-500 font-medium">Success</SmallText>
+              <SmallText className="text-green-500">{addFriendSuccess}</SmallText>
+            </div>
+            <button
+              onClick={() => setAddFriendSuccess(null)}
+              className="ml-auto text-green-500 hover:text-green-500/80"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+
+        {/* Navigation */}
+        <div className="flex gap-4 mb-8 overflow-x-auto">
+          <EmberButton
+            variant={activeSection === 'hearth' ? 'primary' : 'ghost'}
+            onClick={() => setActiveSection('hearth')}
+            size="sm"
+          >
+            <Users className="w-4 h-4 mr-2" />
+            Hearth ({flames.length})
+          </EmberButton>
+          
+          <EmberButton
+            variant={activeSection === 'friends' ? 'primary' : 'ghost'}
+            onClick={() => setActiveSection('friends')}
+            size="sm"
+          >
+            <MessageCircle className="w-4 h-4 mr-2" />
+            Friends ({friends.length})
+          </EmberButton>
+          
+          <div className="relative">
+            <EmberButton
+              variant={activeSection === 'requests' ? 'primary' : 'ghost'}
+              onClick={() => setActiveSection('requests')}
+              size="sm"
+            >
+              <UserPlus className="w-4 h-4 mr-2" />
+              Requests
+            </EmberButton>
+            {(incomingRequestsCount > 0 || outgoingRequestsCount > 0) && (
+              <div className="absolute -top-2 -right-2 w-5 h-5 bg-carmine text-white text-xs rounded-full flex items-center justify-center">
+                {incomingRequestsCount + outgoingRequestsCount}
+              </div>
+            )}
+          </div>
+          
+          <EmberButton
+            variant={activeSection === 'settings' ? 'primary' : 'ghost'}
+            onClick={() => setActiveSection('settings')}
+            size="sm"
+          >
+            <Settings className="w-4 h-4 mr-2" />
+            Settings
+          </EmberButton>
+        </div>
+
+        {/* Content Sections */}
+        {activeSection === 'hearth' && (
+          <section>
+            <div className="flex items-center justify-between mb-6">
+              <Heading2>Connection Hearth</Heading2>
+              <div className="flex gap-2">
+                <IconedButton
+                  icon={<UserPlus className="w-4 h-4" />}
+                  label="Add Friend"
+                  onClick={() => setShowAddFriend(true)}
+                  size="sm"
+                />
+                <IconedButton
+                  icon={<RefreshCw className="w-4 h-4" />}
+                  label="Refresh"
+                  onClick={loadFriendsAndFlames}
+                  size="sm"
+                  variant="ghost"
                 />
               </div>
             </div>
-          ) : (
-            /* Hearth Display */
-            <div className="w-full min-h-screen flex items-center justify-center px-4 overflow-auto bg-black">
-              <div className="w-full h-full relative">
-                {/* Empty Hearth State - Simplified */}
-                {userConnections.length === 0 && (
-                  <div className="absolute inset-0 flex items-center justify-center z-30">
-                    <IconedButton
-                      icon={<UserPlus className="w-6 h-6" />}
-                      label="Add Friends"
-                      size="lg"
-                      onClick={() => {
-                        setActiveTab('friends');
-                        setShowSettings(true);
-                      }}
-                    />
-                  </div>
-                )}
-
-                {/* Responsive Hearth Component with scrolling support */}
-                <div 
-                  className="w-full h-full overflow-auto scrollbar-hide"
-                  style={{
-                    minWidth: `${hearthDimensions.width}px`,
-                    minHeight: `${hearthDimensions.height}px`
-                  }}
-                >
+            
+            {flames.length > 0 ? (
+              <BurningPaperCard glowOnHover>
+                <div className="flex justify-center bg-black rounded-soft p-4">
                   <Hearth
-                    flames={enhancedUserConnections}
-                    width={hearthDimensions.width}
-                    height={hearthDimensions.height}
+                    flames={flames}
+                    width={800}
+                    height={600}
                     onFlameClick={handleFlameClick}
-                    onRefresh={handleRefresh}
-                    className="w-full h-full"
                     showUnreadIndicators={true}
+                    className="shadow-2xl"
                   />
                 </div>
-              </div>
-            </div>
-          )}
-        </main>
-
-        {/* Settings Modal */}
-        {showSettings && (
-          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-            <div className="w-full max-w-md">
-              <BurningPaperCard glowOnHover className="relative max-h-[600px] flex flex-col">
-                {/* Close Button - Positioned safely within card bounds */}
-                <div className="absolute top-6 right-6 z-60">
-                  <IconedButton
-                    icon={<X className="w-4 h-4" />}
-                    label="Close Settings"
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => setShowSettings(false)}
-                  />
-                </div>
-
-                {/* Header Section - Fixed */}
-                <div className="flex-shrink-0 px-6 pt-6 pb-4">
-                  {/* Interactive Tab Navigation with Ember Effects */}
-                  <div className="flex mb-4 relative">
-                    <button
-                      onClick={() => setActiveTab('profile')}
-                      className={`flex-1 px-4 py-3 text-center font-medium transition-all duration-300 relative overflow-visible ${
-                        activeTab === 'profile'
-                          ? 'text-ember border-b-2 border-ember'
-                          : 'text-ash hover:text-softwhite'
-                      }`}
-                    >
-                      {/* Ember particles for active tab - Only show when tab is active */}
-                      {activeTab === 'profile' && Array.from({ length: 12 }).map((_, i) => (
-                        <span
-                          key={`profile-ember-${i}`}
-                          className="absolute rounded-full pointer-events-none z-10 animate-ember"
-                          style={{
-                            width: `${1 + Math.random()}px`,
-                            height: `${1 + Math.random()}px`,
-                            backgroundColor: `rgb(255,191,0)`,
-                            left: `${10 + Math.random() * 80}%`,
-                            top: `${10 + Math.random() * 80}%`,
-                            filter: 'blur(0.5px) brightness(2)',
-                            animationDelay: `${Math.random() * 2}s`,
-                            animationDuration: `${2 + Math.random() * 2}s`,
-                            boxShadow: '0 0 3px currentColor',
-                            mixBlendMode: 'screen'
-                          } as React.CSSProperties}
-                        />
-                      ))}
-                      <User className="w-4 h-4 inline mr-2" />
-                      Profile
-                    </button>
-                    <button
-                      onClick={() => setActiveTab('friends')}
-                      className={`flex-1 px-4 py-3 text-center font-medium transition-all duration-300 relative overflow-visible ${
-                        activeTab === 'friends'
-                          ? 'text-ember border-b-2 border-ember'
-                          : 'text-ash hover:text-softwhite'
-                      }`}
-                    >
-                      {/* Ember particles for active tab - Only show when tab is active */}
-                      {activeTab === 'friends' && Array.from({ length: 12 }).map((_, i) => (
-                        <span
-                          key={`friends-ember-${i}`}
-                          className="absolute rounded-full pointer-events-none z-10 animate-ember"
-                          style={{
-                            width: `${1 + Math.random()}px`,
-                            height: `${1 + Math.random()}px`,
-                            backgroundColor: `rgb(255,191,0)`,
-                            left: `${10 + Math.random() * 80}%`,
-                            top: `${10 + Math.random() * 80}%`,
-                            filter: 'blur(0.5px) brightness(2)',
-                            animationDelay: `${Math.random() * 2}s`,
-                            animationDuration: `${2 + Math.random() * 2}s`,
-                            boxShadow: '0 0 3px currentColor',
-                            mixBlendMode: 'screen'
-                          } as React.CSSProperties}
-                        />
-                      ))}
-                      <UserPlus className="w-4 h-4 inline mr-2" />
-                      Friends
-                    </button>
-                  </div>
-                </div>
-
-                {/* Scrollable Content Area */}
-                <div 
-                  className="flex-1 overflow-y-auto px-6 scrollbar-hide"
-                  style={{ 
-                    maxHeight: '400px',
-                    minHeight: '200px'
-                  }}
-                >
-                  {activeTab === 'profile' && (
-                    <div className="space-y-6 pb-4">
-                      {/* Profile Validation Message */}
-                      {profileMessage && (
-                        <div className={`p-3 rounded-soft border flex items-start gap-3 ${
-                          profileMessage.type === 'success' 
-                            ? 'bg-ember/20 border-ember/50' 
-                            : 'bg-carmine/20 border-carmine/50'
-                        }`}>
-                          {profileMessage.type === 'success' ? (
-                            <CheckCircle className="w-5 h-5 text-ember flex-shrink-0 mt-0.5" />
-                          ) : (
-                            <AlertCircle className="w-5 h-5 text-carmine flex-shrink-0 mt-0.5" />
-                          )}
-                          <SmallText className={profileMessage.type === 'success' ? 'text-ember' : 'text-carmine'}>
-                            {profileMessage.message}
-                          </SmallText>
-                        </div>
-                      )}
-
-                      <div>
-                        <Heading3 className="mb-4">Profile Settings</Heading3>
-                        
-                        {/* Nickname Section */}
-                        <div className="space-y-4">
-                          <div>
-                            <label className="block text-sm font-medium text-softwhite mb-2">
-                              Nickname
-                            </label>
-                            <InputBox
-                              value={nickname}
-                              onChange={setNickname}
-                              placeholder="Your display name"
-                            />
-                          </div>
-                          
-                          <div className="pt-2">
-                            <EmberButton size="sm" onClick={handleSaveProfile}>
-                              Save Profile
-                            </EmberButton>
-                          </div>
-                        </div>
-
-                        {/* Unique Code Section */}
-                        <div className="my-8 pt-6 border-t border-ember/30">
-                          <Heading3 className="text-lg mb-4">Your Unique Code</Heading3>
-                          <TextBlock className="text-sm text-ash mb-4">
-                            Share this code with friends so they can add you to their hearth.
-                          </TextBlock>
-                          
-                          <div className="flex items-center gap-3 p-3 bg-navy/40 rounded border border-ember/30">
-                            <code className="flex-1 text-ember font-mono text-sm bg-dark/50 px-3 py-2 rounded">
-                              {profile?.unique_code || 'Loading...'}
-                            </code>
-                            <IconedButton
-                              icon={<Copy className="w-4 h-4" />}
-                              label="Copy Code"
-                              size="sm"
-                              variant="ghost"
-                              onClick={copyUniqueCode}
-                            />
-                          </div>
-                        </div>
-
-                        {/* Password Change Section */}
-                        <div className="space-y-4 pt-6 border-t border-ember/30">
-                          <Heading3 className="text-lg">Change Password</Heading3>
-                          
-                          <div>
-                            <label className="block text-sm font-medium text-softwhite mb-2">
-                              Current Password
-                            </label>
-                            <PasswordInput
-                              value={currentPassword}
-                              onChange={setCurrentPassword}
-                              placeholder="Enter current password"
-                            />
-                          </div>
-
-                          <div>
-                            <label className="block text-sm font-medium text-softwhite mb-2">
-                              New Password
-                            </label>
-                            <PasswordInput
-                              value={newPassword}
-                              onChange={setNewPassword}
-                              placeholder="Enter new password"
-                            />
-                          </div>
-
-                          <div>
-                            <label className="block text-sm font-medium text-softwhite mb-2">
-                              Confirm New Password
-                            </label>
-                            <PasswordInput
-                              value={confirmPassword}
-                              onChange={setConfirmPassword}
-                              placeholder="Confirm new password"
-                            />
-                          </div>
-
-                          <div className="pt-2">
-                            <EmberButton size="sm" onClick={handlePasswordChange}>
-                              Change Password
-                            </EmberButton>
-                          </div>
-                        </div>
-
-                        {/* Account Actions Section */}
-                        <div className="space-y-4 pt-6 border-t border-ember/30">
-                          <Heading3 className="text-lg">Account Actions</Heading3>
-                          
-                          <div className="space-y-3">
-                            <button
-                              onClick={handleLogout}
-                              className="w-full px-4 py-2 text-sm bg-navy/40 text-softwhite border border-ember/30 rounded-soft hover:bg-navy/60 hover:border-ember/50 transition-all duration-300 flex items-center justify-center gap-2"
-                            >
-                              Log Out
-                            </button>
-                            
-                            <button
-                              onClick={handleDeleteAccount}
-                              className="w-full px-4 py-2 text-sm bg-carmine/20 text-carmine border border-carmine/50 rounded-soft hover:bg-carmine/30 transition-all duration-300 flex items-center justify-center gap-2"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                              Delete Account
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {activeTab === 'friends' && (
-                    <div className="space-y-6 pb-4">
-                      {/* Friends Validation Message */}
-                      {friendsMessage && (
-                        <div className={`p-3 rounded-soft border flex items-start gap-3 ${
-                          friendsMessage.type === 'success' 
-                            ? 'bg-ember/20 border-ember/50' 
-                            : 'bg-carmine/20 border-carmine/50'
-                        }`}>
-                          {friendsMessage.type === 'success' ? (
-                            <CheckCircle className="w-5 h-5 text-ember flex-shrink-0 mt-0.5" />
-                          ) : (
-                            <AlertCircle className="w-5 h-5 text-carmine flex-shrink-0 mt-0.5" />
-                          )}
-                          <SmallText className={friendsMessage.type === 'success' ? 'text-ember' : 'text-carmine'}>
-                            {friendsMessage.message}
-                          </SmallText>
-                        </div>
-                      )}
-
-                      <div>
-                        <div className="flex items-center justify-between mb-4">
-                          <Heading3>Add Friend</Heading3>
-                          <IconedButton
-                            icon={<RefreshCw className="w-4 h-4" />}
-                            label="Refresh"
-                            size="sm"
-                            variant="ghost"
-                            onClick={handleRefresh}
-                          />
-                        </div>
-                        <TextBlock className="text-sm text-ash mb-6">
-                          Enter a username or unique code to send a friend request. Once accepted, their ember will appear in your hearth.
-                        </TextBlock>
-                        
-                        <div className="space-y-4">
-                          <div>
-                            <label className="block text-sm font-medium text-softwhite mb-2">
-                              Username or Unique Code
-                            </label>
-                            <InputBox
-                              value={friendUsername}
-                              onChange={setFriendUsername}
-                              placeholder="Enter username or EMBR-XXXXXXXX"
-                            />
-                          </div>
-                          
-                          <div className="pt-2">
-                            <EmberButton 
-                              size="sm" 
-                              onClick={handleAddFriend}
-                              disabled={loading}
-                            >
-                              {loading ? 'Sending...' : 'Send Friend Request'}
-                            </EmberButton>
-                          </div>
-                        </div>
-
-                        {/* Error Display */}
-                        {error && (
-                          <div className="mt-4 p-3 bg-carmine/20 border border-carmine/50 rounded">
-                            <SmallText className="text-carmine">{error}</SmallText>
-                          </div>
-                        )}
-
-                        {/* Incoming Friend Requests Section */}
-                        <div className="mt-8 pt-6 border-t border-ember/30">
-                          <Heading3 className="text-lg mb-4 flex items-center gap-2">
-                            <UserPlus className="w-5 h-5 text-ember" />
-                            Incoming Requests
-                            {incomingRequests.length > 0 && (
-                              <span className="bg-ember text-dark text-xs px-2 py-1 rounded-full font-bold">
-                                {incomingRequests.length}
-                              </span>
-                            )}
-                          </Heading3>
-                          
-                          <div className="space-y-3">
-                            {incomingRequests.length > 0 ? (
-                              incomingRequests.map((request) => (
-                                <div key={request.request_id} className="flex items-center justify-between p-3 bg-navy/40 rounded border border-ember/30 transition-all duration-300 hover:border-ember/50">
-                                  <div>
-                                    <SmallText className="font-medium text-softwhite">{request.sender_nickname}</SmallText>
-                                    <TinyText className="text-ash block">{formatTimeAgo(request.created_at)}</TinyText>
-                                  </div>
-                                  <div className="flex gap-2">
-                                    {request.status === 'pending' ? (
-                                      <>
-                                        <IconedButton
-                                          icon={<CheckCircle className="w-4 h-4" />}
-                                          label="Accept"
-                                          size="sm"
-                                          variant="ghost"
-                                          onClick={() => handleAcceptRequest(request.request_id)}
-                                          className="text-ember hover:bg-ember/20"
-                                        />
-                                        <IconedButton
-                                          icon={<XCircle className="w-4 h-4" />}
-                                          label="Decline"
-                                          size="sm"
-                                          variant="ghost"
-                                          onClick={() => handleDeclineRequest(request.request_id)}
-                                          className="text-carmine hover:bg-carmine/20"
-                                        />
-                                      </>
-                                    ) : request.status === 'accepted' ? (
-                                      <span className="px-3 py-1 text-xs bg-ember/20 text-ember rounded">Accepted</span>
-                                    ) : (
-                                      <span className="px-3 py-1 text-xs bg-carmine/20 text-carmine rounded">Declined</span>
-                                    )}
-                                  </div>
-                                </div>
-                              ))
-                            ) : (
-                              <div className="text-center py-6">
-                                <UserPlus className="w-8 h-8 text-ash mx-auto mb-2 opacity-50" />
-                                <SmallText className="text-ash">No incoming friend requests</SmallText>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Outgoing Friend Requests Section */}
-                        <div className="pt-6 border-t border-ember/30">
-                          <Heading3 className="text-lg mb-4 flex items-center gap-2">
-                            <Clock className="w-5 h-5 text-ember" />
-                            Sent Requests
-                            {outgoingRequests.length > 0 && (
-                              <span className="bg-ash text-dark text-xs px-2 py-1 rounded-full font-bold">
-                                {outgoingRequests.length}
-                              </span>
-                            )}
-                          </Heading3>
-                          
-                          <div className="space-y-3">
-                            {outgoingRequests.length > 0 ? (
-                              outgoingRequests.map((request) => (
-                                <div key={request.request_id} className="flex items-center justify-between p-3 bg-deepblue/40 rounded border border-ember/20 transition-all duration-300 hover:border-ember/40">
-                                  <div>
-                                    <SmallText className="font-medium text-softwhite">{request.receiver_nickname}</SmallText>
-                                    <TinyText className="text-ash block">{formatTimeAgo(request.created_at)}</TinyText>
-                                  </div>
-                                  <div className="flex items-center gap-2">
-                                    <Clock className="w-4 h-4 text-ash" />
-                                    <span className="px-3 py-1 text-xs bg-ash/20 text-ash rounded">Pending</span>
-                                  </div>
-                                </div>
-                              ))
-                            ) : (
-                              <div className="text-center py-6">
-                                <Clock className="w-8 h-8 text-ash mx-auto mb-2 opacity-50" />
-                                <SmallText className="text-ash">No pending sent requests</SmallText>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* Footer - Fixed at bottom */}
-                <div className="flex-shrink-0 px-6 pb-6 pt-4 border-t border-ember/30">
-                  <SmallText className="text-center text-ash">
-                    Your connections are private and secure.
+                <div className="mt-4 text-center">
+                  <SmallText className="text-ash">
+                    Click on any flame to start a conversation. Bright flames show active connections.
                   </SmallText>
                 </div>
               </BurningPaperCard>
+            ) : (
+              <BurningPaperCard className="text-center py-12">
+                <Users className="w-16 h-16 text-ash mx-auto mb-4" />
+                <Heading3 className="text-ash mb-4">No connections yet</Heading3>
+                <TextBlock className="text-ash mb-6 max-w-md mx-auto">
+                  Your hearth is empty. Add friends to see their flames glow here.
+                </TextBlock>
+                <EmberButton onClick={() => setShowAddFriend(true)}>
+                  <UserPlus className="w-4 h-4 mr-2" />
+                  Add Your First Friend
+                </EmberButton>
+              </BurningPaperCard>
+            )}
+          </section>
+        )}
+
+        {activeSection === 'friends' && (
+          <section>
+            <div className="flex items-center justify-between mb-6">
+              <Heading2>Friends ({friends.length})</Heading2>
+              <IconedButton
+                icon={<UserPlus className="w-4 h-4" />}
+                label="Add Friend"
+                onClick={() => setShowAddFriend(true)}
+                size="sm"
+              />
             </div>
+            
+            {friends.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {friends.map((friend) => (
+                  <BurningPaperCard key={friend.friend_id} glowOnHover>
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 bg-gradient-to-br from-ember to-carmine rounded-full flex items-center justify-center text-dark font-bold">
+                        {friend.friend_nickname.charAt(0)}
+                      </div>
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <Heading3 className="text-lg">{friend.friend_nickname}</Heading3>
+                          {unreadCounts[friend.friend_id] > 0 && (
+                            <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+                          )}
+                        </div>
+                        <SmallText className="text-ash">{friend.friend_unique_code}</SmallText>
+                        <SmallText className="text-ash">
+                          Strength: {(friend.connection_strength * 100).toFixed(0)}%
+                        </SmallText>
+                        <TinyText className="text-ash">
+                          Last interaction: {formatTimeAgo(friend.last_interaction_at)}
+                        </TinyText>
+                      </div>
+                      <IconedButton
+                        icon={<MessageCircle className="w-4 h-4" />}
+                        label="Chat"
+                        onClick={() => handleFlameClick(friend.friend_id)}
+                        size="sm"
+                      />
+                    </div>
+                  </BurningPaperCard>
+                ))}
+              </div>
+            ) : (
+              <BurningPaperCard className="text-center py-12">
+                <Users className="w-16 h-16 text-ash mx-auto mb-4" />
+                <Heading3 className="text-ash mb-4">No friends yet</Heading3>
+                <TextBlock className="text-ash mb-6">
+                  Add friends to start building connections.
+                </TextBlock>
+                <EmberButton onClick={() => setShowAddFriend(true)}>
+                  <UserPlus className="w-4 h-4 mr-2" />
+                  Add Friend
+                </EmberButton>
+              </BurningPaperCard>
+            )}
+          </section>
+        )}
+
+        {activeSection === 'requests' && (
+          <section>
+            <Heading2 className="mb-6">Friend Requests</Heading2>
+            
+            <div className="space-y-6">
+              {/* Incoming Requests */}
+              <div>
+                <div className="flex items-center gap-2 mb-4">
+                  <Heading3>Incoming Requests</Heading3>
+                  {incomingRequestsCount > 0 && (
+                    <div className="w-6 h-6 bg-carmine text-white text-xs rounded-full flex items-center justify-center">
+                      {incomingRequestsCount}
+                    </div>
+                  )}
+                </div>
+                
+                {friendRequests.filter(req => req.request_type === 'incoming' && req.status === 'pending').length > 0 ? (
+                  <div className="space-y-4">
+                    {friendRequests
+                      .filter(req => req.request_type === 'incoming' && req.status === 'pending')
+                      .map((request) => (
+                        <BurningPaperCard key={request.request_id} glowOnHover>
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-4">
+                              <div className="w-12 h-12 bg-gradient-to-br from-navy to-deepblue rounded-full flex items-center justify-center text-ember font-bold border border-ember/30">
+                                {request.sender_nickname.charAt(0)}
+                              </div>
+                              <div>
+                                <Heading3 className="text-lg">{request.sender_nickname}</Heading3>
+                                <SmallText className="text-ash">
+                                  <Clock className="w-3 h-3 inline mr-1" />
+                                  {formatTimeAgo(request.created_at)}
+                                </SmallText>
+                                {request.message && (
+                                  <SmallText className="text-softwhite mt-1">"{request.message}"</SmallText>
+                                )}
+                              </div>
+                            </div>
+                            <div className="flex gap-2">
+                              <IconedButton
+                                icon={<UserCheck className="w-4 h-4" />}
+                                label="Accept"
+                                onClick={() => handleRespondToRequest(request.request_id, 'accepted')}
+                                size="sm"
+                              />
+                              <IconedButton
+                                icon={<UserX className="w-4 h-4" />}
+                                label="Decline"
+                                onClick={() => handleRespondToRequest(request.request_id, 'declined')}
+                                size="sm"
+                                variant="ghost"
+                              />
+                            </div>
+                          </div>
+                        </BurningPaperCard>
+                      ))}
+                  </div>
+                ) : (
+                  <BurningPaperCard className="text-center py-8">
+                    <UserPlus className="w-12 h-12 text-ash mx-auto mb-3" />
+                    <SmallText className="text-ash">No incoming friend requests</SmallText>
+                  </BurningPaperCard>
+                )}
+              </div>
+
+              {/* Outgoing Requests */}
+              <div>
+                <div className="flex items-center gap-2 mb-4">
+                  <Heading3>Sent Requests</Heading3>
+                  {outgoingRequestsCount > 0 && (
+                    <div className="w-6 h-6 bg-ember text-dark text-xs rounded-full flex items-center justify-center">
+                      {outgoingRequestsCount}
+                    </div>
+                  )}
+                </div>
+                
+                {friendRequests.filter(req => req.request_type === 'outgoing').length > 0 ? (
+                  <div className="space-y-4">
+                    {friendRequests
+                      .filter(req => req.request_type === 'outgoing')
+                      .map((request) => (
+                        <BurningPaperCard key={request.request_id}>
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-4">
+                              <div className="w-12 h-12 bg-gradient-to-br from-ember to-carmine rounded-full flex items-center justify-center text-dark font-bold">
+                                {request.receiver_nickname.charAt(0)}
+                              </div>
+                              <div>
+                                <Heading3 className="text-lg">{request.receiver_nickname}</Heading3>
+                                <SmallText className="text-ash">
+                                  <Clock className="w-3 h-3 inline mr-1" />
+                                  {formatTimeAgo(request.created_at)}
+                                </SmallText>
+                                {request.message && (
+                                  <SmallText className="text-softwhite mt-1">"{request.message}"</SmallText>
+                                )}
+                              </div>
+                            </div>
+                            <div className={`px-3 py-1 rounded-soft text-xs font-medium ${
+                              request.status === 'pending' 
+                                ? 'bg-ember/20 text-ember' 
+                                : request.status === 'accepted'
+                                  ? 'bg-green-500/20 text-green-500'
+                                  : 'bg-carmine/20 text-carmine'
+                            }`}>
+                              {request.status.charAt(0).toUpperCase() + request.status.slice(1)}
+                            </div>
+                          </div>
+                        </BurningPaperCard>
+                      ))}
+                  </div>
+                ) : (
+                  <BurningPaperCard className="text-center py-8">
+                    <UserPlus className="w-12 h-12 text-ash mx-auto mb-3" />
+                    <SmallText className="text-ash">No sent friend requests</SmallText>
+                  </BurningPaperCard>
+                )}
+              </div>
+            </div>
+          </section>
+        )}
+
+        {activeSection === 'settings' && (
+          <section>
+            <Heading2 className="mb-6">Settings</Heading2>
+            
+            <div className="space-y-6">
+              <BurningPaperCard>
+                <Heading3 className="mb-4">Your Unique Code</Heading3>
+                <TextBlock className="text-ash mb-4">
+                  Share this code with friends so they can add you to their hearth.
+                </TextBlock>
+                <div className="flex items-center gap-3">
+                  <div className="flex-1 px-4 py-3 bg-navy/60 border border-ember/30 rounded-soft font-mono text-ember">
+                    {profile?.unique_code}
+                  </div>
+                  <IconedButton
+                    icon={copiedCode ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                    label={copiedCode ? "Copied!" : "Copy"}
+                    onClick={handleCopyCode}
+                    size="sm"
+                  />
+                </div>
+              </BurningPaperCard>
+
+              <BurningPaperCard>
+                <Heading3 className="mb-4">Profile Information</Heading3>
+                <div className="space-y-3">
+                  <div>
+                    <SmallText className="text-ash">Nickname</SmallText>
+                    <TextBlock>{profile?.nickname}</TextBlock>
+                  </div>
+                  <div>
+                    <SmallText className="text-ash">Member since</SmallText>
+                    <TextBlock>{profile?.created_at ? new Date(profile.created_at).toLocaleDateString() : 'Unknown'}</TextBlock>
+                  </div>
+                </div>
+              </BurningPaperCard>
+            </div>
+          </section>
+        )}
+
+        {/* Add Friend Modal */}
+        {showAddFriend && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+            <BurningPaperCard glowOnHover className="w-full max-w-md">
+              <div className="flex items-center justify-between mb-6">
+                <Heading3>Add Friend</Heading3>
+                <IconedButton
+                  icon={<X className="w-4 h-4" />}
+                  label="Close"
+                  onClick={() => {
+                    setShowAddFriend(false);
+                    setFriendCode('');
+                    setFriendMessage('');
+                    setAddFriendError(null);
+                  }}
+                  size="sm"
+                  variant="ghost"
+                />
+              </div>
+
+              {addFriendError && (
+                <div className="mb-4 p-3 bg-carmine/20 border border-carmine/50 rounded-soft">
+                  <SmallText className="text-carmine">{addFriendError}</SmallText>
+                </div>
+              )}
+
+              <form onSubmit={handleAddFriend} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-softwhite mb-2">
+                    Friend's Unique Code *
+                  </label>
+                  <InputBox
+                    value={friendCode}
+                    onChange={setFriendCode}
+                    placeholder="EMBR-XXXXXXXX"
+                    className="w-full"
+                  />
+                  <SmallText className="text-ash mt-1">
+                    Ask your friend for their unique code from their settings.
+                  </SmallText>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-softwhite mb-2">
+                    Message (optional)
+                  </label>
+                  <InputBox
+                    value={friendMessage}
+                    onChange={setFriendMessage}
+                    placeholder="Hi! I'd like to add you as a friend."
+                    className="w-full"
+                  />
+                </div>
+
+                <div className="flex gap-3 pt-4">
+                  <EmberButton
+                    type="submit"
+                    disabled={addFriendLoading || !friendCode.trim()}
+                    className="flex-1"
+                  >
+                    {addFriendLoading ? 'Sending...' : 'Send Request'}
+                  </EmberButton>
+                  <EmberButton
+                    type="button"
+                    variant="ghost"
+                    onClick={() => {
+                      setShowAddFriend(false);
+                      setFriendCode('');
+                      setFriendMessage('');
+                      setAddFriendError(null);
+                    }}
+                  >
+                    Cancel
+                  </EmberButton>
+                </div>
+              </form>
+            </BurningPaperCard>
           </div>
         )}
       </div>

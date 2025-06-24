@@ -285,6 +285,17 @@ export const LandingPage: React.FC = () => {
   if (needsEmailConfirmation) {
     return (
       <div className="min-h-screen bg-[var(--color-dark)] text-[var(--color-white)] flex items-center justify-center px-8 py-16">
+        {/* Bolt Logo */}
+        <div className="absolute top-4 left-4 z-50">
+          <a href="https://bolt.new" target="_blank" rel="noopener noreferrer">
+            <img 
+              src="/logotext_poweredby_360w.png" 
+              alt="Powered by Bolt" 
+              className="h-8 opacity-80 hover:opacity-100 transition-opacity"
+            />
+          </a>
+        </div>
+
         <div className="max-w-md mx-auto">
           <BurningPaperCard glowOnHover className="text-center">
             <div className="space-y-6">
@@ -352,6 +363,17 @@ export const LandingPage: React.FC = () => {
   if (success && activeTab === 'signup') {
     return (
       <div className="min-h-screen bg-[var(--color-dark)] text-[var(--color-white)] flex items-center justify-center px-8 py-16">
+        {/* Bolt Logo */}
+        <div className="absolute top-4 left-4 z-50">
+          <a href="https://bolt.new" target="_blank" rel="noopener noreferrer">
+            <img 
+              src="/logotext_poweredby_360w.png" 
+              alt="Powered by Bolt" 
+              className="h-8 opacity-80 hover:opacity-100 transition-opacity"
+            />
+          </a>
+        </div>
+
         <div className="max-w-md mx-auto">
           <BurningPaperCard glowOnHover className="text-center">
             <div className="space-y-6">
@@ -376,6 +398,17 @@ export const LandingPage: React.FC = () => {
   if (success && activeTab === 'login') {
     return (
       <div className="min-h-screen bg-[var(--color-dark)] text-[var(--color-white)] flex items-center justify-center px-8 py-16">
+        {/* Bolt Logo */}
+        <div className="absolute top-4 left-4 z-50">
+          <a href="https://bolt.new" target="_blank" rel="noopener noreferrer">
+            <img 
+              src="/logotext_poweredby_360w.png" 
+              alt="Powered by Bolt" 
+              className="h-8 opacity-80 hover:opacity-100 transition-opacity"
+            />
+          </a>
+        </div>
+
         <div className="max-w-md mx-auto">
           <BurningPaperCard glowOnHover className="text-center">
             <div className="space-y-6">
@@ -398,6 +431,17 @@ export const LandingPage: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-[var(--color-dark)] text-[var(--color-white)]">
+      {/* Bolt Logo - Fixed position at top left */}
+      <div className="fixed top-4 left-4 z-50">
+        <a href="https://bolt.new" target="_blank" rel="noopener noreferrer">
+          <img 
+            src="/logotext_poweredby_360w.png" 
+            alt="Powered by Bolt" 
+            className="h-8 opacity-80 hover:opacity-100 transition-opacity"
+          />
+        </a>
+      </div>
+
       {/* Hero Section */}
       <section className="relative min-h-screen flex flex-col items-center justify-center px-8 py-16">
         {/* Enhanced animated background embers */}
