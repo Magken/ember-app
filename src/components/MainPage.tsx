@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from './auth/AuthProvider';
 import { BurningPaperCard } from './ui/Card';
 import { EmberButton } from './ui/Button';
@@ -79,12 +79,8 @@ export const MainPage: React.FC = () => {
   const refreshIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Initialize subscription managers
-  const friendRequestsSubscription = useFriendRequestsSubscription(loadFriendRequests);
-  const friendshipsSubscription = useFriendshipsSubscription(loadFriendsAndFlames);
-
   // Load friends and convert to flames with strength calculation
-  const loadFriendsAndFlames = async () => {
+  const loadFriendsAndFlames = useCallback(async () => {
     try {
       console.log('Loading friends and flames...');
       const { data: friendsData, error: friendsError } = await getFriends();
@@ -135,10 +131,10 @@ export const MainPage: React.FC = () => {
       console.error('Error loading friends:', err);
       setError(err.message || 'Failed to load friends');
     }
-  };
+  }, []);
 
   // Load friend requests
-  const loadFriendRequests = async () => {
+  const loadFriendRequests = useCallback(async () => {
     try {
       console.log('Loading friend requests...');
       const { data: requestsData, error: requestsError } = await getFriendRequests();
@@ -153,10 +149,14 @@ export const MainPage: React.FC = () => {
       console.error('Error loading friend requests:', err);
       setError(err.message || 'Failed to load friend requests');
     }
-  };
+  }, []);
+
+  // Initialize subscription managers
+  const friendRequestsSubscription = useFriendRequestsSubscription(loadFriendRequests);
+  const friendshipsSubscription = useFriendshipsSubscription(loadFriendsAndFlames);
 
   // Load conversations and unread counts
-  const loadConversations = async () => {
+  const loadConversations = useCallback(async () => {
     try {
       console.log('Loading conversations...');
       const { data: conversationsData, error: conversationsError } = await getUserConversations();
@@ -175,7 +175,7 @@ export const MainPage: React.FC = () => {
     } catch (err: any) {
       console.error('Error loading conversations:', err);
     }
-  };
+  }, []);
 
   // Initial data load
   useEffect(() => {
@@ -200,7 +200,7 @@ export const MainPage: React.FC = () => {
     if (user) {
       loadInitialData();
     }
-  }, [user]);
+  }, [user, loadFriendsAndFlames, loadFriendRequests, loadConversations]);
 
   // Set up real-time subscriptions
   useEffect(() => {
@@ -233,7 +233,7 @@ export const MainPage: React.FC = () => {
         conversationsUnsubscribeRef.current();
       }
     };
-  }, [user]);
+  }, [user, loadConversations, loadFriendsAndFlames]);
 
   // Set up background polling for friend requests and conversations
   useEffect(() => {
@@ -259,7 +259,7 @@ export const MainPage: React.FC = () => {
         clearInterval(pollIntervalRef.current);
       }
     };
-  }, [user]);
+  }, [user, loadFriendRequests, loadConversations]);
 
   // Set up hearth refresh every 30 minutes (only when not actively chatting)
   useEffect(() => {
@@ -282,7 +282,7 @@ export const MainPage: React.FC = () => {
         clearInterval(refreshIntervalRef.current);
       }
     };
-  }, [user, flames.length]);
+  }, [user, flames.length, loadFriendsAndFlames]);
 
   // Listen for custom events (friend request sent/responded)
   useEffect(() => {
@@ -320,7 +320,7 @@ export const MainPage: React.FC = () => {
       window.removeEventListener('friendRequestResponded', handleFriendRequestResponded as EventListener);
       window.removeEventListener('messageSent', handleMessageSent);
     };
-  }, []);
+  }, [loadFriendRequests, loadFriendsAndFlames, loadConversations]);
 
   // Handle sending friend request
   const handleSendFriendRequest = async () => {
