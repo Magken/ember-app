@@ -24,7 +24,7 @@ interface HearthProps {
   showUnreadIndicators?: boolean; // New prop to control unread indicators
 }
 
-// Stable position generator that ensures flames are at least 50px apart
+// Stable position generator that ensures flames are at least 100px apart
 const generateStablePositions = (
   flameCount: number, 
   existingPositions?: Array<{id: string, x: number, y: number}>,
@@ -37,13 +37,13 @@ const generateStablePositions = (
   const centerX = 50;
   const centerY = 50;
   
-  // Calculate minimum distance in percentage based on 50px requirement
+  // Calculate minimum distance in percentage based on 100px requirement
   // Use the smaller dimension to ensure consistent spacing
   const minDimension = Math.min(hearthWidth, hearthHeight);
-  const minDistancePercentage = (50 / minDimension) * 100; // Convert 50px to percentage
-  const actualMinDistance = Math.max(minDistancePercentage, 8); // Ensure at least 8% spacing
+  const minDistancePercentage = (100 / minDimension) * 100; // Convert 100px to percentage
+  const actualMinDistance = Math.max(minDistancePercentage, 12); // Ensure at least 12% spacing
   
-  console.log(`Generating positions with ${actualMinDistance.toFixed(1)}% minimum distance (${minDimension}px hearth)`);
+  console.log(`Generating positions with ${actualMinDistance.toFixed(1)}% minimum distance (${minDimension}px hearth, 100px requirement)`);
   
   // If we have existing positions and the count hasn't changed, reuse them
   if (existingPositions && existingPositions.length === flameCount) {
@@ -109,7 +109,7 @@ const generateStablePositions = (
     positions.push({ x, y });
   }
   
-  console.log(`Generated ${positions.length} positions with minimum ${actualMinDistance.toFixed(1)}% spacing`);
+  console.log(`Generated ${positions.length} positions with minimum ${actualMinDistance.toFixed(1)}% spacing (100px requirement)`);
   return positions;
 };
 
@@ -408,7 +408,7 @@ export const Hearth: React.FC<HearthProps> = ({
 
       {/* Pan Instructions */}
       <div className="absolute bottom-4 left-4 z-20 px-2 py-1 bg-navy/80 text-ash text-xs rounded border border-ember/30 pointer-events-none">
-        Drag to pan • 50px spacing
+        Drag to pan • 100px spacing
       </div>
 
       {/* Hearth Canvas with Pure Black Background */}
@@ -438,7 +438,7 @@ export const Hearth: React.FC<HearthProps> = ({
           />
         </div>
 
-        {/* Flames positioned on the hearth with guaranteed 50px spacing */}
+        {/* Flames positioned on the hearth with guaranteed 100px spacing */}
         {sortedFlames.map((flame) => {
           const flameSize = flame.size || 60;
           

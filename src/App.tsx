@@ -1,15 +1,11 @@
 import React, { useState } from 'react';
 import { AuthProvider, useAuth } from './components/auth/AuthProvider';
 import { LandingPage } from './components/LandingPage';
-import { StyleShowcase } from './components/StyleShowcase';
-import { FlameShowcase } from './components/FlameShowcase';
-import { ChatPage } from './components/ChatPage';
 import { MainPage } from './components/MainPage';
 
 // Main App Content Component
 const AppContent: React.FC = () => {
   const { user, loading, error, clearAuthState } = useAuth();
-  const [currentPage, setCurrentPage] = useState<'landing' | 'showcase' | 'flames' | 'chat' | 'main'>('main');
 
   // Show error state if there's an authentication error
   if (error) {
@@ -68,61 +64,9 @@ const AppContent: React.FC = () => {
     );
   }
 
-  // If user is authenticated, show main app
+  // If user is authenticated, show main app (no navigation menu)
   if (user) {
-    return (
-      <>
-        {/* Navigation for authenticated users */}
-        <nav className="fixed top-4 right-4 z-50 flex gap-2">
-          <button
-            onClick={() => setCurrentPage('main')}
-            className={`px-4 py-2 rounded-soft text-sm font-medium transition-all duration-300 ${
-              currentPage === 'main'
-                ? 'bg-ember text-dark'
-                : 'bg-navy/80 text-softwhite hover:bg-ember/20 border border-ember/30'
-            }`}
-          >
-            Main
-          </button>
-          <button
-            onClick={() => setCurrentPage('showcase')}
-            className={`px-4 py-2 rounded-soft text-sm font-medium transition-all duration-300 ${
-              currentPage === 'showcase'
-                ? 'bg-ember text-dark'
-                : 'bg-navy/80 text-softwhite hover:bg-ember/20 border border-ember/30'
-            }`}
-          >
-            Design System
-          </button>
-          <button
-            onClick={() => setCurrentPage('flames')}
-            className={`px-4 py-2 rounded-soft text-sm font-medium transition-all duration-300 ${
-              currentPage === 'flames'
-                ? 'bg-ember text-dark'
-                : 'bg-navy/80 text-softwhite hover:bg-ember/20 border border-ember/30'
-            }`}
-          >
-            Flames
-          </button>
-          <button
-            onClick={() => setCurrentPage('chat')}
-            className={`px-4 py-2 rounded-soft text-sm font-medium transition-all duration-300 ${
-              currentPage === 'chat'
-                ? 'bg-ember text-dark'
-                : 'bg-navy/80 text-softwhite hover:bg-ember/20 border border-ember/30'
-            }`}
-          >
-            Chat
-          </button>
-        </nav>
-
-        {/* Page Content for authenticated users */}
-        {currentPage === 'main' && <MainPage />}
-        {currentPage === 'showcase' && <StyleShowcase />}
-        {currentPage === 'flames' && <FlameShowcase />}
-        {currentPage === 'chat' && <ChatPage />}
-      </>
-    );
+    return <MainPage />;
   }
 
   // If user is not authenticated, show landing page

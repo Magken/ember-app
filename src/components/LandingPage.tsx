@@ -72,7 +72,7 @@ const generateLetterClipPath = (seed: number) => {
 };
 
 export const LandingPage: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'signup' | 'login'>('signup');
+  const [activeTab, setActiveTab] = useState<'signup' | 'login'>('login'); // Changed to 'login' first
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [nickname, setNickname] = useState('');
@@ -91,11 +91,6 @@ export const LandingPage: React.FC = () => {
   const [emailValid, setEmailValid] = useState<boolean | null>(null);
   const [passwordErrors, setPasswordErrors] = useState<string[]>([]);
   const [passwordsMatch, setPasswordsMatch] = useState<boolean | null>(null);
-  
-  // Feature card expansion states - separate for each feature
-  const [expandedCanvas, setExpandedCanvas] = useState(false);
-  const [expandedMessages, setExpandedMessages] = useState(false);
-  const [expandedMetrics, setExpandedMetrics] = useState(false);
 
   // Scroll to auth section
   const scrollToAuth = () => {
@@ -575,38 +570,6 @@ export const LandingPage: React.FC = () => {
             <div className="flex mb-8 -mx-4 -mt-4 relative">
               <button
                 onClick={() => {
-                  setActiveTab('signup');
-                  setError(null);
-                }}
-                className={`flex-1 px-6 py-4 text-center font-medium transition-all duration-300 relative overflow-visible ${
-                  activeTab === 'signup'
-                    ? 'text-ember border-b-2 border-ember'
-                    : 'text-ash hover:text-softwhite'
-                }`}
-              >
-                {/* Ember particles for active tab */}
-                {activeTab === 'signup' && Array.from({ length: 15 }).map((_, i) => (
-                  <span
-                    key={`signup-ember-${i}`}
-                    className="absolute rounded-full pointer-events-none z-10 animate-ember"
-                    style={{
-                      width: `${rand(1, 2)}px`,
-                      height: `${rand(1, 2)}px`,
-                      backgroundColor: `rgb(${randColor(EMBER_COLORS)})`,
-                      left: `${rand(10, 90)}%`,
-                      top: `${rand(10, 90)}%`,
-                      filter: 'blur(0.5px) brightness(2)',
-                      animationDelay: `${rand(0, 2)}s`,
-                      animationDuration: `${rand(2, 4)}s`,
-                      boxShadow: '0 0 3px currentColor',
-                      mixBlendMode: 'screen'
-                    } as React.CSSProperties}
-                  />
-                ))}
-                Join Embr
-              </button>
-              <button
-                onClick={() => {
                   setActiveTab('login');
                   setError(null);
                 }}
@@ -636,6 +599,38 @@ export const LandingPage: React.FC = () => {
                   />
                 ))}
                 Welcome back
+              </button>
+              <button
+                onClick={() => {
+                  setActiveTab('signup');
+                  setError(null);
+                }}
+                className={`flex-1 px-6 py-4 text-center font-medium transition-all duration-300 relative overflow-visible ${
+                  activeTab === 'signup'
+                    ? 'text-ember border-b-2 border-ember'
+                    : 'text-ash hover:text-softwhite'
+                }`}
+              >
+                {/* Ember particles for active tab */}
+                {activeTab === 'signup' && Array.from({ length: 15 }).map((_, i) => (
+                  <span
+                    key={`signup-ember-${i}`}
+                    className="absolute rounded-full pointer-events-none z-10 animate-ember"
+                    style={{
+                      width: `${rand(1, 2)}px`,
+                      height: `${rand(1, 2)}px`,
+                      backgroundColor: `rgb(${randColor(EMBER_COLORS)})`,
+                      left: `${rand(10, 90)}%`,
+                      top: `${rand(10, 90)}%`,
+                      filter: 'blur(0.5px) brightness(2)',
+                      animationDelay: `${rand(0, 2)}s`,
+                      animationDuration: `${rand(2, 4)}s`,
+                      boxShadow: '0 0 3px currentColor',
+                      mixBlendMode: 'screen'
+                    } as React.CSSProperties}
+                  />
+                ))}
+                Join Embr
               </button>
             </div>
 
@@ -777,7 +772,7 @@ export const LandingPage: React.FC = () => {
         </div>
       </section>
 
-      {/* About Embr Section */}
+      {/* About Embr Section - Simplified without expansion boxes */}
       <section className="py-20 px-8">
         <div className="max-w-6xl mx-auto">
           <div className="text-center mb-16">
@@ -819,212 +814,56 @@ export const LandingPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Canvas View Feature - Separate Section */}
-          <section className="mb-16">
-            <div className="max-w-2xl mx-auto">
-              <BurningPaperCard className="text-center">
-                <div className="space-y-4">
-                  {/* Design System Style Icon Button with correct color */}
-                  <div className="w-16 h-16 mx-auto flex items-center justify-center">
-                    <IconedButton
-                      icon={<Eye className="w-6 h-6 text-softwhite" />}
-                      label="Learn more about Canvas View"
-                      size="lg"
-                      onClick={() => setExpandedCanvas(!expandedCanvas)}
-                      className={`transition-all duration-300 ${
-                        expandedCanvas ? 'scale-110' : ''
-                      }`}
-                    />
-                  </div>
-                  
-                  <Heading3>Canvas View</Heading3>
-                  
-                  {/* Short description - always visible */}
-                  <TextBlock className="text-sm">
-                    A dark, ambient backdrop dotted with glowing embers, each pulsing to life as connections grow.
-                  </TextBlock>
-                  
-                  {/* Expanded content - conditionally visible */}
-                  {expandedCanvas && (
-                    <div className="mt-6 pt-6 border-t border-ember/30 text-left">
-                      <TextBlock className="text-sm leading-relaxed whitespace-pre-line">
-                        {`The Canvas View is your personal constellation of connections. Each ember represents someone important in your life, positioned organically across a dark, starlit backdrop. The brighter the ember, the stronger your connection.
-
-Key Features:
-• Interactive zoom and pan to explore your network
-• Dynamic positioning based on relationship strength
-• Ambient particle effects that respond to activity
-• Intuitive visual hierarchy showing connection priorities
-• Smooth animations that bring your network to life
-
-The canvas adapts to your interaction patterns, subtly repositioning embers based on recent conversations and shared moments. It's not just a contact list—it's a living map of your relationships.`}
-                      </TextBlock>
-                      
-                      <div className="mt-4 flex justify-center">
-                        <button
-                          onClick={() => setExpandedCanvas(false)}
-                          className="text-xs text-ember hover:text-carmine transition-colors"
-                        >
-                          Show less
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                  
-                  {/* Show more button when not expanded */}
-                  {!expandedCanvas && (
-                    <button
-                      onClick={() => setExpandedCanvas(true)}
-                      className="text-xs text-ember hover:text-carmine transition-colors mt-2"
-                    >
-                      Learn more
-                    </button>
-                  )}
+          {/* Feature Cards - Simplified without expansion */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            <BurningPaperCard className="text-center">
+              <div className="space-y-4">
+                <div className="w-16 h-16 mx-auto flex items-center justify-center">
+                  <IconedButton
+                    icon={<Eye className="w-6 h-6 text-softwhite" />}
+                    label="Canvas View"
+                    size="lg"
+                  />
                 </div>
-              </BurningPaperCard>
-            </div>
-          </section>
+                <Heading3>Canvas View</Heading3>
+                <TextBlock className="text-sm">
+                  A dark, ambient backdrop dotted with glowing embers, each pulsing to life as connections grow.
+                </TextBlock>
+              </div>
+            </BurningPaperCard>
 
-          {/* Ephemeral Messages Feature - Separate Section */}
-          <section className="mb-16">
-            <div className="max-w-2xl mx-auto">
-              <BurningPaperCard className="text-center">
-                <div className="space-y-4">
-                  {/* Design System Style Icon Button */}
-                  <div className="w-16 h-16 mx-auto flex items-center justify-center">
-                    <IconedButton
-                      icon={<MessageCircle className="w-6 h-6 text-softwhite" />}
-                      label="Learn more about Ephemeral Messages"
-                      size="lg"
-                      onClick={() => setExpandedMessages(!expandedMessages)}
-                      className={`transition-all duration-300 ${
-                        expandedMessages ? 'scale-110' : ''
-                      }`}
-                    />
-                  </div>
-                  
-                  <Heading3>Ephemeral Messages</Heading3>
-                  
-                  {/* Short description - always visible */}
-                  <TextBlock className="text-sm">
-                    Notes and photos that burst into view—and burn out on your terms.
-                  </TextBlock>
-                  
-                  {/* Expanded content - conditionally visible */}
-                  {expandedMessages && (
-                    <div className="mt-6 pt-6 border-t border-ember/30 text-left">
-                      <TextBlock className="text-sm leading-relaxed whitespace-pre-line">
-                        {`Ephemeral Messages reimagine how we share moments. Instead of permanent archives, your conversations flow like sparks from a fire—bright, meaningful, and naturally fading.
-
-Message Types:
-• Text messages with ember particle effects
-• Photos that glow and fade over time
-• Voice notes that crackle like fire
-• GIFs with flame-like animations
-• Disappearing media with customizable timers
-
-Each message adds fuel to your connection's flame. The more you interact, the brighter your ember burns. Messages don't just disappear—they transform into the warmth that keeps your relationships glowing.
-
-Privacy by design: No permanent storage, no data mining, just authentic moments shared between people who matter.`}
-                      </TextBlock>
-                      
-                      <div className="mt-4 flex justify-center">
-                        <button
-                          onClick={() => setExpandedMessages(false)}
-                          className="text-xs text-ember hover:text-carmine transition-colors"
-                        >
-                          Show less
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                  
-                  {/* Show more button when not expanded */}
-                  {!expandedMessages && (
-                    <button
-                      onClick={() => setExpandedMessages(true)}
-                      className="text-xs text-ember hover:text-carmine transition-colors mt-2"
-                    >
-                      Learn more
-                    </button>
-                  )}
+            <BurningPaperCard className="text-center">
+              <div className="space-y-4">
+                <div className="w-16 h-16 mx-auto flex items-center justify-center">
+                  <IconedButton
+                    icon={<MessageCircle className="w-6 h-6 text-softwhite" />}
+                    label="Ephemeral Messages"
+                    size="lg"
+                  />
                 </div>
-              </BurningPaperCard>
-            </div>
-          </section>
+                <Heading3>Ephemeral Messages</Heading3>
+                <TextBlock className="text-sm">
+                  Notes and photos that burst into view—and burn out on your terms.
+                </TextBlock>
+              </div>
+            </BurningPaperCard>
 
-          {/* Glow Metrics Feature - Separate Section */}
-          <section className="mb-16">
-            <div className="max-w-2xl mx-auto">
-              <BurningPaperCard className="text-center">
-                <div className="space-y-4">
-                  {/* Design System Style Icon Button */}
-                  <div className="w-16 h-16 mx-auto flex items-center justify-center">
-                    <IconedButton
-                      icon={<Users className="w-6 h-6 text-softwhite" />}
-                      label="Learn more about Glow Metrics"
-                      size="lg"
-                      onClick={() => setExpandedMetrics(!expandedMetrics)}
-                      className={`transition-all duration-300 ${
-                        expandedMetrics ? 'scale-110' : ''
-                      }`}
-                    />
-                  </div>
-                  
-                  <Heading3>Glow Metrics</Heading3>
-                  
-                  {/* Short description - always visible */}
-                  <TextBlock className="text-sm">
-                    See at a glance which friendships need tending, thanks to dynamic brightness and gentle flickers.
-                  </TextBlock>
-                  
-                  {/* Expanded content - conditionally visible */}
-                  {expandedMetrics && (
-                    <div className="mt-6 pt-6 border-t border-ember/30 text-left">
-                      <TextBlock className="text-sm leading-relaxed whitespace-pre-line">
-                        {`Glow Metrics transform relationship maintenance from a chore into an intuitive experience. Your connections naturally show their health through visual cues.
-
-Visual Indicators:
-• Flame brightness reflects interaction frequency
-• Particle density shows conversation depth
-• Color temperature indicates relationship warmth
-• Flickering patterns reveal communication rhythms
-• Dying embers highlight neglected connections
-
-Smart Insights:
-• Gentle reminders for friends you haven't contacted
-• Celebration animations for strengthening bonds
-• Seasonal patterns in your social energy
-• Connection quality over quantity metrics
-• Personalized suggestions for meaningful outreach
-
-No numbers, no scores, no social pressure—just beautiful, intuitive feedback that helps you nurture the relationships that matter most.`}
-                      </TextBlock>
-                      
-                      <div className="mt-4 flex justify-center">
-                        <button
-                          onClick={() => setExpandedMetrics(false)}
-                          className="text-xs text-ember hover:text-carmine transition-colors"
-                        >
-                          Show less
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                  
-                  {/* Show more button when not expanded */}
-                  {!expandedMetrics && (
-                    <button
-                      onClick={() => setExpandedMetrics(true)}
-                      className="text-xs text-ember hover:text-carmine transition-colors mt-2"
-                    >
-                      Learn more
-                    </button>
-                  )}
+            <BurningPaperCard className="text-center">
+              <div className="space-y-4">
+                <div className="w-16 h-16 mx-auto flex items-center justify-center">
+                  <IconedButton
+                    icon={<Users className="w-6 h-6 text-softwhite" />}
+                    label="Glow Metrics"
+                    size="lg"
+                  />
                 </div>
-              </BurningPaperCard>
-            </div>
-          </section>
+                <Heading3>Glow Metrics</Heading3>
+                <TextBlock className="text-sm">
+                  See at a glance which friendships need tending, thanks to dynamic brightness and gentle flickers.
+                </TextBlock>
+              </div>
+            </BurningPaperCard>
+          </div>
         </div>
       </section>
     </div>
