@@ -8,7 +8,7 @@ import { IconedButton } from './ui/IconedButton';
 import { Heading1, Heading2, Heading3, TextBlock, SmallText } from './ui/Typography';
 import { Hearth } from './ui/Hearth';
 import { Sparkles, Eye, MessageCircle, Zap, Users, AlertCircle, CheckCircle } from 'lucide-react';
-import { signUp, signIn, validateEmail, validatePasswordStrength } from '../lib/auth';
+import { authService } from '../lib/auth';
 
 const EMBER_COLORS = [
   '255,191,0',   // ember yellow
@@ -107,7 +107,7 @@ export const LandingPage: React.FC = () => {
   const handleEmailChange = (value: string) => {
     setEmail(value);
     if (value) {
-      setEmailValid(validateEmail(value));
+      setEmailValid(authService.validateEmail(value));
     } else {
       setEmailValid(null);
     }
@@ -117,7 +117,7 @@ export const LandingPage: React.FC = () => {
   const handlePasswordChange = (value: string) => {
     setPassword(value);
     if (value) {
-      const validation = validatePasswordStrength(value);
+      const validation = authService.validatePasswordStrength(value);
       setPasswordErrors(validation.errors);
     } else {
       setPasswordErrors([]);
@@ -148,11 +148,11 @@ export const LandingPage: React.FC = () => {
     try {
       if (activeTab === 'signup') {
         // Sign up validation
-        if (!validateEmail(email)) {
+        if (!authService.validateEmail(email)) {
           throw new Error('Please enter a valid email address');
         }
 
-        const passwordValidation = validatePasswordStrength(password);
+        const passwordValidation = authService.validatePasswordStrength(password);
         if (!passwordValidation.valid) {
           throw new Error(passwordValidation.errors.join('. '));
         }
@@ -169,7 +169,7 @@ export const LandingPage: React.FC = () => {
           throw new Error('You must agree to the terms and conditions');
         }
 
-        const { data, error } = await signUp(email, password, nickname, agreeToTerms);
+        const { data, error } = await authService.signUp(email, password, nickname);
 
         if (error) {
           throw error;
@@ -180,7 +180,7 @@ export const LandingPage: React.FC = () => {
         }
       } else {
         // Sign in validation
-        if (!validateEmail(email)) {
+        if (!authService.validateEmail(email)) {
           throw new Error('Please enter a valid email address');
         }
 
@@ -188,7 +188,7 @@ export const LandingPage: React.FC = () => {
           throw new Error('Please enter your password');
         }
 
-        const { data, error } = await signIn(email, password);
+        const { data, error } = await authService.signIn(email, password);
 
         if (error) {
           throw error;
