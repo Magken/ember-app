@@ -38,7 +38,7 @@ const randColor = (colors: string[]) =>
 export const Flame: React.FC<FlameProps> = ({
   strength = 0.7,
   size = 60,
-  animated = false, // Default to false for stationary flames
+  animated = true,
   className = '',
   onClick,
   interactive = true
@@ -56,15 +56,15 @@ export const Flame: React.FC<FlameProps> = ({
   // Dynamic properties based on strength
   const coreSize = size * (0.3 + clampedStrength * 0.7);
   const glowSize = size * (0.8 + clampedStrength * 1.2);
-  const particleCount = Math.floor(clampedStrength * 20) + (hovered ? 10 : 0);
-  const twinkleCount = Math.floor(clampedStrength * 8) + (hovered ? 5 : 0);
-  const flameCount = Math.floor(clampedStrength * 6) + (hovered ? 4 : 0);
+  const particleCount = Math.floor(clampedStrength * 40) + (hovered ? 20 : 0);
+  const twinkleCount = Math.floor(clampedStrength * 15) + (hovered ? 10 : 0);
+  const flameCount = Math.floor(clampedStrength * 12) + (hovered ? 8 : 0);
   
   // Color selection based on strength
   const colorPalette = isWeak ? WEAK_COLORS : EMBER_COLORS;
   const primaryColor = isWeak ? '139,69,19' : isStrong ? '255,191,0' : '255,140,0';
   
-  // Generate stationary ember particles in radial pattern
+  // Generate ember particles radiating outward in perfect radial pattern
   const emberParticles = useMemo(() => {
     return Array.from({ length: particleCount }).map((_, i) => {
       // Create perfect radial distribution
@@ -85,15 +85,20 @@ export const Flame: React.FC<FlameProps> = ({
         x,
         y,
         angle,
+        delay: rand(0, 4),
+        duration: rand(isWeak ? 4 : 1.5, isWeak ? 8 : 3),
         size: rand(isWeak ? 0.5 : 1, isWeak ? 1.5 : 3),
         color: randColor(colorPalette),
         intensity: rand(isWeak ? 0.3 : 0.8, isWeak ? 0.6 : 1.5),
-        opacity: rand(0.4, 0.9)
+        drift: {
+          x: Math.cos(angle) * rand(10, 25), // Drift in same radial direction
+          y: Math.sin(angle) * rand(10, 25) - rand(5, 15) // Plus slight upward drift
+        }
       };
     });
   }, [particleCount, size, isWeak, colorPalette, clampedStrength]);
 
-  // Generate stationary twinkling stars in radial pattern around the flame
+  // Generate twinkling stars in radial pattern around the flame
   const twinkles = useMemo(() => {
     return Array.from({ length: twinkleCount }).map((_, i) => {
       // Radial distribution for twinkles
@@ -109,14 +114,15 @@ export const Flame: React.FC<FlameProps> = ({
       return {
         x,
         y,
+        delay: rand(0, 3),
+        duration: rand(0.5, 1.5),
         size: rand(1, 2),
-        intensity: rand(0.6, 1.2),
-        opacity: rand(0.3, 0.8)
+        intensity: rand(0.6, 1.2)
       };
     });
   }, [twinkleCount, size]);
 
-  // Generate stationary flame licks radiating outward from center for strong flames
+  // Generate flame licks radiating outward from center for strong flames
   const flameLicks = useMemo(() => {
     if (isWeak) return [];
     
@@ -136,14 +142,19 @@ export const Flame: React.FC<FlameProps> = ({
         x,
         y,
         angle,
+        delay: rand(0, 2),
+        duration: rand(0.3, 0.8),
         width: rand(2, isStrong ? 6 : 4),
         height: rand(6, isStrong ? 15 : 10),
         color: randColor(EMBER_COLORS.slice(0, 3)),
-        intensity: rand(0.8, isStrong ? 2 : 1.3),
-        opacity: rand(0.5, 0.9)
+        intensity: rand(0.8, isStrong ? 2 : 1.3)
       };
     });
   }, [flameCount, size, isWeak, isStrong]);
+
+  // Pulsing animation timing based on strength
+  const pulseSpeed = isWeak ? '4s' : isMedium ? '2s' : '1s';
+  const pulseIntensity = isWeak ? 0.3 : isMedium ? 0.6 : 1;
 
   return (
     <div
@@ -153,33 +164,36 @@ export const Flame: React.FC<FlameProps> = ({
       onMouseEnter={() => interactive && setHovered(true)}
       onMouseLeave={() => interactive && setHovered(false)}
     >
-      {/* Outer glow rings */}
+      {/* Outer glow rings with pulsing animation */}
       <div
         className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 rounded-full pointer-events-none"
         style={{
           width: glowSize * 2,
           height: glowSize * 2,
-          background: `radial-gradient(circle, rgba(${primaryColor}, 0.3) 0%, rgba(${primaryColor}, 0.1) 40%, transparent 70%)`,
+          background: `radial-gradient(circle, rgba(${primaryColor}, ${pulseIntensity * 0.3}) 0%, rgba(${primaryColor}, ${pulseIntensity * 0.1}) 40%, transparent 70%)`,
           filter: `blur(${isWeak ? 8 : 15}px)`,
+          animation: animated ? `emberPulse ${pulseSpeed} ease-in-out infinite` : 'none',
           transform: `translate(-50%, -50%) scale(${hovered ? 1.3 : 1})`,
           transition: 'transform 0.5s ease-out'
         }}
       />
 
-      {/* Middle glow */}
+      {/* Middle glow with reverse pulsing */}
       <div
         className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 rounded-full pointer-events-none"
         style={{
           width: glowSize,
           height: glowSize,
-          background: `radial-gradient(circle, rgba(${primaryColor}, 0.6) 0%, rgba(${primaryColor}, 0.3) 50%, transparent 80%)`,
+          background: `radial-gradient(circle, rgba(${primaryColor}, ${pulseIntensity * 0.6}) 0%, rgba(${primaryColor}, ${pulseIntensity * 0.3}) 50%, transparent 80%)`,
           filter: `blur(${isWeak ? 4 : 8}px)`,
+          animation: animated ? `emberPulse ${pulseSpeed} ease-in-out infinite reverse` : 'none',
+          animationDelay: '0.5s',
           transform: `translate(-50%, -50%) scale(${hovered ? 1.2 : 1})`,
           transition: 'transform 0.3s ease-out'
         }}
       />
 
-      {/* Core flame */}
+      {/* Core flame with pulsing */}
       <div
         className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 rounded-full pointer-events-none"
         style={{
@@ -189,17 +203,19 @@ export const Flame: React.FC<FlameProps> = ({
             ? `radial-gradient(circle, rgba(${primaryColor}, 0.8) 0%, rgba(${primaryColor}, 0.4) 60%, transparent 90%)`
             : `radial-gradient(circle, rgba(255,255,255, 0.9) 0%, rgba(${primaryColor}, 1) 30%, rgba(${primaryColor}, 0.6) 70%, transparent 90%)`,
           filter: `blur(${isWeak ? 1 : 0.5}px)`,
+          animation: animated ? `emberPulse ${pulseSpeed} ease-in-out infinite` : 'none',
+          animationDelay: '0.25s',
           transform: `translate(-50%, -50%) scale(${hovered ? 1.4 : 1})`,
           transition: 'transform 0.3s ease-out',
-          boxShadow: `0 0 ${isWeak ? 5 : 15}px rgba(${primaryColor}, 0.8)`
+          boxShadow: `0 0 ${isWeak ? 5 : 15}px rgba(${primaryColor}, ${pulseIntensity})`
         }}
       />
 
-      {/* Stationary flame licks - all upright, positioned radially around center */}
+      {/* Flickering flame licks - all upright, positioned radially around center */}
       {!isWeak && flameLicks.map((flame, i) => (
         <div
           key={`flame-${i}`}
-          className="absolute pointer-events-none"
+          className="absolute pointer-events-none flame-flicker"
           style={{
             width: flame.width,
             height: flame.height,
@@ -207,22 +223,23 @@ export const Flame: React.FC<FlameProps> = ({
             top: `calc(50% + ${flame.y}px)`,
             background: `linear-gradient(to top, rgba(${flame.color}, ${flame.intensity}), rgba(${flame.color}, ${flame.intensity * 0.6}), transparent)`,
             borderRadius: '50% 50% 50% 50% / 60% 60% 40% 40%',
+            animationDelay: `${flame.delay}s`,
+            animationDuration: `${flame.duration}s`,
             filter: 'blur(0.5px)',
             mixBlendMode: 'screen',
             // Keep flames upright - no rotation
             transform: `translate(-50%, -50%) scale(${hovered ? 1.2 : 1})`,
             transformOrigin: 'center bottom',
-            transition: 'transform 0.3s ease-out',
-            opacity: flame.opacity
+            transition: 'transform 0.3s ease-out'
           }}
         />
       ))}
 
-      {/* Stationary ember particles radiating outward in perfect radial pattern */}
+      {/* Moving ember particles radiating outward in perfect radial pattern */}
       {emberParticles.map((ember, i) => (
         <span
           key={`ember-${i}`}
-          className="absolute rounded-full pointer-events-none"
+          className="absolute rounded-full pointer-events-none animate-ember"
           style={{
             width: ember.size,
             height: ember.size,
@@ -230,16 +247,19 @@ export const Flame: React.FC<FlameProps> = ({
             left: `calc(50% + ${ember.x}px)`,
             top: `calc(50% + ${ember.y}px)`,
             filter: `blur(0.5px) brightness(${ember.intensity})`,
+            animationDelay: `${ember.delay}s`,
+            animationDuration: `${ember.duration}s`,
             boxShadow: `0 0 ${ember.size * 2}px rgba(${ember.color}, ${ember.intensity * 0.8})`,
             mixBlendMode: 'screen',
             transform: `translate(-50%, -50%) scale(${hovered ? 1.3 : 1})`,
             transition: 'transform 0.3s ease-out',
-            opacity: ember.opacity
-          }}
+            '--tx': `${ember.drift.x}px`,
+            '--ty': `${ember.drift.y}px`
+          } as React.CSSProperties}
         />
       ))}
 
-      {/* Stationary twinkling stars in radial pattern */}
+      {/* Twinkling stars in radial pattern with pulsing animation */}
       {twinkles.map((twinkle, i) => (
         <span
           key={`twinkle-${i}`}
@@ -251,16 +271,20 @@ export const Flame: React.FC<FlameProps> = ({
             left: `calc(50% + ${twinkle.x}px)`,
             top: `calc(50% + ${twinkle.y}px)`,
             filter: 'blur(0.5px)',
+            animationName: 'emberPulse',
+            animationDelay: `${twinkle.delay}s`,
+            animationDuration: `${twinkle.duration}s`,
+            animationIterationCount: 'infinite',
+            animationTimingFunction: 'ease-in-out',
             boxShadow: `0 0 ${twinkle.size * 3}px rgba(255,255,255, ${twinkle.intensity})`,
             mixBlendMode: 'screen',
             transform: `translate(-50%, -50%) scale(${hovered ? 1.2 : 1})`,
-            transition: 'transform 0.3s ease-out',
-            opacity: twinkle.opacity
-          }}
+            transition: 'transform 0.3s ease-out'
+          } as React.CSSProperties}
         />
       ))}
 
-      {/* Central bright point for strong flames */}
+      {/* Central bright point for strong flames with pulsing */}
       {isStrong && (
         <div
           className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 rounded-full pointer-events-none"
@@ -269,6 +293,7 @@ export const Flame: React.FC<FlameProps> = ({
             height: 4,
             background: 'rgba(255,255,255, 1)',
             filter: 'blur(0.5px)',
+            animation: animated ? `emberPulse 0.5s ease-in-out infinite` : 'none',
             boxShadow: '0 0 8px rgba(255,255,255, 1)',
             transform: `translate(-50%, -50%) scale(${hovered ? 2 : 1})`,
             transition: 'transform 0.3s ease-out'
