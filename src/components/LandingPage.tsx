@@ -241,34 +241,28 @@ export const LandingPage: React.FC = () => {
     r: generateLetterClipPath(4)
   }), []);
 
-  // Generate massive ember particle system
-  const massiveEmberParticles = React.useMemo(() => {
-    return Array.from({ length: 120 }).map((_, i) => ({
+  // Generate stationary ember particles (no movement)
+  const stationaryEmberParticles = React.useMemo(() => {
+    return Array.from({ length: 80 }).map((_, i) => ({
       left: `${rand(-10, 110)}%`,
       top: `${rand(-10, 110)}%`,
-      delay: `${rand(0, 6)}s`,
-      duration: `${rand(2, 5)}s`,
-      size: `${rand(0.5, 3)}px`,
+      size: `${rand(0.5, 2)}px`,
       color: randColor(EMBER_COLORS),
       intensity: rand(0.6, 1.2),
-      drift: {
-        x: `${rand(-20, 20)}px`,
-        y: `${rand(-30, -10)}px`
-      }
+      opacity: rand(0.3, 0.8)
     }));
   }, []);
 
-  // Generate flickering flame elements
-  const flickeringFlames = React.useMemo(() => {
-    return Array.from({ length: 40 }).map((_, i) => ({
+  // Generate stationary flame elements (no movement)
+  const stationaryFlames = React.useMemo(() => {
+    return Array.from({ length: 25 }).map((_, i) => ({
       left: `${rand(5, 95)}%`,
       top: `${rand(5, 95)}%`,
-      delay: `${rand(0, 3)}s`,
-      duration: `${rand(0.4, 0.8)}s`,
-      width: `${rand(2, 5)}px`,
-      height: `${rand(6, 12)}px`,
+      width: `${rand(2, 4)}px`,
+      height: `${rand(6, 10)}px`,
       color: randColor(EMBER_COLORS.slice(0, 3)), // Only warm colors for flames
-      intensity: rand(0.8, 1.5)
+      intensity: rand(0.8, 1.5),
+      opacity: rand(0.4, 0.9)
     }));
   }, []);
 
@@ -416,17 +410,15 @@ export const LandingPage: React.FC = () => {
 
       {/* Hero Section */}
       <section className="relative min-h-screen flex flex-col items-center justify-center px-8 py-16">
-        {/* Enhanced animated background embers */}
+        {/* Stationary background embers */}
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          {[...Array(50)].map((_, i) => (
+          {[...Array(30)].map((_, i) => (
             <div
               key={i}
-              className="absolute w-1 h-1 bg-ember rounded-full animate-ember opacity-20"
+              className="absolute w-1 h-1 bg-ember rounded-full opacity-20"
               style={{
                 left: `${Math.random() * 100}%`,
                 top: `${Math.random() * 100}%`,
-                animationDelay: `${Math.random() * 6}s`,
-                animationDuration: `${2 + Math.random() * 3}s`,
               }}
             />
           ))}
@@ -437,11 +429,11 @@ export const LandingPage: React.FC = () => {
           <div className="mb-12 relative overflow-visible">
             <div className="inline-flex items-center justify-center gap-3 relative overflow-visible">
               
-              {/* Massive ember particle system around entire logo */}
-              {massiveEmberParticles.map((ember, i) => (
+              {/* Stationary ember particle system around entire logo */}
+              {stationaryEmberParticles.map((ember, i) => (
                 <span
-                  key={`massive-ember-${i}`}
-                  className="absolute rounded-full pointer-events-none z-20 animate-ember"
+                  key={`stationary-ember-${i}`}
+                  className="absolute rounded-full pointer-events-none z-20"
                   style={{
                     width: ember.size,
                     height: ember.size,
@@ -449,21 +441,18 @@ export const LandingPage: React.FC = () => {
                     left: ember.left,
                     top: ember.top,
                     filter: `blur(0.5px) brightness(${ember.intensity})`,
-                    animationDelay: ember.delay,
-                    animationDuration: ember.duration,
                     boxShadow: `0 0 4px rgb(${ember.color})`,
                     mixBlendMode: 'screen',
-                    '--tx': ember.drift.x,
-                    '--ty': ember.drift.y
-                  } as React.CSSProperties}
+                    opacity: ember.opacity
+                  }}
                 />
               ))}
 
-              {/* Flickering flame elements */}
-              {flickeringFlames.map((flame, i) => (
+              {/* Stationary flame elements */}
+              {stationaryFlames.map((flame, i) => (
                 <div
-                  key={`flame-${i}`}
-                  className="absolute pointer-events-none z-15 flame-flicker"
+                  key={`stationary-flame-${i}`}
+                  className="absolute pointer-events-none z-15"
                   style={{
                     width: flame.width,
                     height: flame.height,
@@ -471,11 +460,10 @@ export const LandingPage: React.FC = () => {
                     top: flame.top,
                     background: `linear-gradient(to top, rgb(${flame.color}), rgba(${flame.color}, 0.7), transparent)`,
                     borderRadius: '50% 50% 50% 50% / 60% 60% 40% 40%',
-                    animationDelay: flame.delay,
-                    animationDuration: flame.duration,
                     filter: `blur(0.5px) brightness(${flame.intensity})`,
-                    mixBlendMode: 'screen'
-                  } as React.CSSProperties}
+                    mixBlendMode: 'screen',
+                    opacity: flame.opacity
+                  }}
                 />
               ))}
 
@@ -595,11 +583,11 @@ export const LandingPage: React.FC = () => {
                     : 'text-ash hover:text-softwhite'
                 }`}
               >
-                {/* Ember particles for active tab */}
-                {activeTab === 'login' && Array.from({ length: 15 }).map((_, i) => (
+                {/* Stationary ember particles for active tab */}
+                {activeTab === 'login' && Array.from({ length: 8 }).map((_, i) => (
                   <span
                     key={`login-ember-${i}`}
-                    className="absolute rounded-full pointer-events-none z-10 animate-ember"
+                    className="absolute rounded-full pointer-events-none z-10"
                     style={{
                       width: `${rand(1, 2)}px`,
                       height: `${rand(1, 2)}px`,
@@ -607,11 +595,10 @@ export const LandingPage: React.FC = () => {
                       left: `${rand(10, 90)}%`,
                       top: `${rand(10, 90)}%`,
                       filter: 'blur(0.5px) brightness(2)',
-                      animationDelay: `${rand(0, 2)}s`,
-                      animationDuration: `${rand(2, 4)}s`,
                       boxShadow: '0 0 3px currentColor',
-                      mixBlendMode: 'screen'
-                    } as React.CSSProperties}
+                      mixBlendMode: 'screen',
+                      opacity: 0.8
+                    }}
                   />
                 ))}
                 Welcome back
@@ -627,11 +614,11 @@ export const LandingPage: React.FC = () => {
                     : 'text-ash hover:text-softwhite'
                 }`}
               >
-                {/* Ember particles for active tab */}
-                {activeTab === 'signup' && Array.from({ length: 15 }).map((_, i) => (
+                {/* Stationary ember particles for active tab */}
+                {activeTab === 'signup' && Array.from({ length: 8 }).map((_, i) => (
                   <span
                     key={`signup-ember-${i}`}
-                    className="absolute rounded-full pointer-events-none z-10 animate-ember"
+                    className="absolute rounded-full pointer-events-none z-10"
                     style={{
                       width: `${rand(1, 2)}px`,
                       height: `${rand(1, 2)}px`,
@@ -639,11 +626,10 @@ export const LandingPage: React.FC = () => {
                       left: `${rand(10, 90)}%`,
                       top: `${rand(10, 90)}%`,
                       filter: 'blur(0.5px) brightness(2)',
-                      animationDelay: `${rand(0, 2)}s`,
-                      animationDuration: `${rand(2, 4)}s`,
                       boxShadow: '0 0 3px currentColor',
-                      mixBlendMode: 'screen'
-                    } as React.CSSProperties}
+                      mixBlendMode: 'screen',
+                      opacity: 0.8
+                    }}
                   />
                 ))}
                 Join Embr
