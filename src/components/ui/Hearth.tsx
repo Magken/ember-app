@@ -230,11 +230,8 @@ export const Hearth: React.FC<HearthProps> = ({
     }
   };
 
-  // Mouse drag handlers for panning - only with Ctrl+click
+  // Mouse drag handlers for panning
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    // Only start dragging if Ctrl key is pressed
-    if (!e.ctrlKey) return;
-    
     const target = e.target as HTMLElement;
     
     // Allow events to reach buttons and flames
@@ -266,41 +263,30 @@ export const Hearth: React.FC<HearthProps> = ({
     setIsDragging(false);
   }, []);
 
-  // Touch handlers for mobile panning - only with 2 fingers
+  // Touch handlers for mobile panning
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
-    // Only start dragging if there are exactly 2 touches (2-finger drag)
-    if (e.touches.length !== 2) return;
-    
-    const target = e.target as HTMLElement;
-    
-    // Allow events to reach buttons and flames
-    if (target.closest('button') || target.closest('.flame-container')) {
-      return;
-    }
+    if (e.touches.length === 1) {
+      const target = e.target as HTMLElement;
+      
+      // Allow events to reach buttons and flames
+      if (target.closest('button') || target.closest('.flame-container')) {
+        return;
+      }
 
-    // Calculate center point between two touches
-    const touch1 = e.touches[0];
-    const touch2 = e.touches[1];
-    const centerX = (touch1.clientX + touch2.clientX) / 2;
-    const centerY = (touch1.clientY + touch2.clientY) / 2;
-    
-    setIsDragging(true);
-    setDragStart({ x: centerX, y: centerY });
-    setPanStart({ x: panX, y: panY });
-    e.preventDefault();
+      const touch = e.touches[0];
+      setIsDragging(true);
+      setDragStart({ x: touch.clientX, y: touch.clientY });
+      setPanStart({ x: panX, y: panY });
+      e.preventDefault();
+    }
   }, [panX, panY]);
 
   const handleTouchMove = useCallback((e: TouchEvent) => {
-    if (!isDragging || e.touches.length !== 2) return;
+    if (!isDragging || e.touches.length !== 1) return;
 
-    // Calculate center point between two touches
-    const touch1 = e.touches[0];
-    const touch2 = e.touches[1];
-    const centerX = (touch1.clientX + touch2.clientX) / 2;
-    const centerY = (touch1.clientY + touch2.clientY) / 2;
-    
-    const deltaX = centerX - dragStart.x;
-    const deltaY = centerY - dragStart.y;
+    const touch = e.touches[0];
+    const deltaX = touch.clientX - dragStart.x;
+    const deltaY = touch.clientY - dragStart.y;
 
     setPanX(panStart.x + deltaX / zoom);
     setPanY(panStart.y + deltaY / zoom);
@@ -438,7 +424,7 @@ export const Hearth: React.FC<HearthProps> = ({
 
       {/* Pan Instructions */}
       <div className="absolute bottom-4 left-4 z-20 px-2 py-1 bg-navy/80 text-ash text-xs rounded border border-ember/30 pointer-events-none">
-        Ctrl+drag to pan • 2-finger drag on mobile • 100px spacing
+        Drag to pan • 100px spacing
       </div>
 
       {/* Hearth Canvas with Pure Black Background */}

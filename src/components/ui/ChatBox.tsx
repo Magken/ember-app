@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { BurningPaperCard } from './Card';
 import { IconedButton } from './IconedButton';
 import { Flame } from './Flame';
 import { TextBlock, SmallText, TinyText } from './Typography';
@@ -256,7 +257,7 @@ export const ChatBox: React.FC<ChatBoxProps> = ({
     <div className={`relative w-full ${className}`} style={{ height }}>
       {/* Ensure the card is properly contained with highest z-index */}
       <div className="w-full h-full relative z-50">
-        <div className="flex flex-col h-full w-full relative z-50 bg-navy/95 border border-ember/30 rounded-soft backdrop-filter backdrop-blur-sm">
+        <BurningPaperCard glowOnHover className="flex flex-col h-full w-full relative z-50">
           {/* Chat Header - Fixed at top with high z-index */}
           <div className="flex items-center gap-3 p-3 md:p-4 border-b border-ember/30 flex-shrink-0 relative z-60">
             {/* Flame icon using our Flame component */}
@@ -328,6 +329,23 @@ export const ChatBox: React.FC<ChatBoxProps> = ({
                       }
                     `}
                   >
+                    {/* Ember particles for user messages */}
+                    {msg.sender === 'user' && Array.from({ length: 8 }).map((_, i) => (
+                      <span
+                        key={i}
+                        className="absolute w-[1px] h-[1px] bg-ember rounded-full pointer-events-none animate-ember z-65"
+                        style={{
+                          left: `${Math.random() * 100}%`,
+                          top: `${Math.random() * 100}%`,
+                          animationDelay: `${Math.random() * 2}s`,
+                          animationDuration: `${2 + Math.random() * 2}s`,
+                          filter: 'blur(0.5px) brightness(2)',
+                          boxShadow: '0 0 2px currentColor',
+                          mixBlendMode: 'screen'
+                        } as React.CSSProperties}
+                      />
+                    ))}
+                    
                     {/* Text content */}
                     {msg.text && (
                       <TextBlock className="text-sm relative z-70 break-words mb-2">{msg.text}</TextBlock>
@@ -432,7 +450,7 @@ export const ChatBox: React.FC<ChatBoxProps> = ({
               disabled={false}
             />
           </div>
-        </div>
+        </BurningPaperCard>
       </div>
     </div>
   );
