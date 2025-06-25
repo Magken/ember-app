@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState } from 'react';
 
 interface IconedButtonProps {
   icon: React.ReactNode;
@@ -10,8 +10,6 @@ interface IconedButtonProps {
   disabled?: boolean;
 }
 
-const emberColors = ['bg-ember', 'bg-carmine', 'bg-deepblue', 'bg-softwhite'];
-
 export const IconedButton: React.FC<IconedButtonProps> = ({
   icon,
   onClick,
@@ -22,16 +20,10 @@ export const IconedButton: React.FC<IconedButtonProps> = ({
   disabled = false
 }) => {
   const [hovered, setHovered] = useState(false);
-  const [burst, setBurst] = useState(false);
 
   const handleClick = () => {
-    setBurst(true);
     onClick?.();
-    setTimeout(() => setBurst(false), 500);
   };
-
-  // Stationary ember particles (no movement)
-  const emberCount = burst ? 15 : hovered ? 8 : 4;
 
   const sizeMap: Record<string, string> = {
     sm: 'w-10 h-10 p-2',
@@ -96,37 +88,6 @@ export const IconedButton: React.FC<IconedButtonProps> = ({
         ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
       `}
     >
-      {/* Stationary ember particles */}
-      {Array.from({ length: emberCount }).map((_, i) => {
-        const edge = Math.floor(Math.random() * 4);
-        const offset = (Math.random() - 0.5) * 30;
-        let x = 0, y = 0;
-        switch (edge) {
-          case 0: x = Math.random() * 100; y = offset; break;
-          case 1: x = 100 + offset; y = Math.random() * 100; break;
-          case 2: x = Math.random() * 100; y = 100 + offset; break;
-          default: x = offset; y = Math.random() * 100; break;
-        }
-        const color = emberColors[i % emberColors.length];
-
-        return (
-          <span
-            key={i}
-            className={`
-              absolute w-[2px] h-[2px] ${color} rounded-full
-              pointer-events-none mix-blend-screen
-            `}
-            style={{
-              left: `${x}%`,
-              top: `${y}%`,
-              filter: `brightness(${burst ? 3 : hovered ? 2.5 : 2}) blur(0.5px)`,
-              boxShadow: `0 0 ${burst ? 3 : 2}px currentColor`,
-              opacity: 0.7
-            }}
-          />
-        );
-      })}
-
       <span className={`relative z-10 transition-all duration-200 ${
         variant === 'ghost' && hovered ? 'drop-shadow-sm' : ''
       }`}>

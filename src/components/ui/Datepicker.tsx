@@ -63,12 +63,6 @@ export const Datepicker: React.FC<DatepickerProps> = ({
   const prevMonth = () => setViewDate(d => new Date(d.getFullYear(), d.getMonth() - 1, 1));
   const nextMonth = () => setViewDate(d => new Date(d.getFullYear(), d.getMonth() + 1, 1));
 
-  // Ember particles
-  const emberColors = ['bg-ember', 'bg-carmine', 'bg-deepblue', 'bg-softwhite'];
-
-  // Stationary embers while open (no movement)
-  const emberCount = open ? 15 : 0;
-
   // Build weeks
   const weeks = useMemo(() => {
     const start = new Date(viewDate.getFullYear(), viewDate.getMonth(), 1);
@@ -103,37 +97,6 @@ export const Datepicker: React.FC<DatepickerProps> = ({
           hover:shadow-ember
         "
       >
-        {/* Stationary ember bursts */}
-        {Array.from({ length: emberCount }).map((_, i) => {
-          const edge = Math.floor(Math.random() * 4);
-          const offset = (Math.random() - 0.5) * 20;
-          let x = 0, y = 0;
-          switch (edge) {
-            case 0: x = Math.random() * 100; y = offset; break;
-            case 1: x = 100 + offset; y = Math.random() * 100; break;
-            case 2: x = Math.random() * 100; y = 100 + offset; break;
-            default: x = offset; y = Math.random() * 100; break;
-          }
-          const color = emberColors[i % emberColors.length];
-
-          return (
-            <span
-              key={i}
-              className={`
-                absolute w-[2px] h-[2px] ${color} rounded-sm
-                pointer-events-none mix-blend-screen
-              `}
-              style={{
-                left: `${x}%`,
-                top: `${y}%`,
-                opacity: 0.7,
-                filter: 'brightness(2) blur(0.5px)',
-                boxShadow: '0 0 2px currentColor'
-              }}
-            />
-          );
-        })}
-
         <span className="relative z-10">{displayLabel}</span>
         {open
           ? <ChevronUp className="ml-2 w-4 h-4 relative z-10 text-[var(--color-ember)]" />

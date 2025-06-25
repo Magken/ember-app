@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState } from 'react';
 
 interface ButtonProps {
   children: React.ReactNode;
@@ -9,8 +9,6 @@ interface ButtonProps {
   disabled?: boolean;
 }
 
-const emberColors = ['bg-ember', 'bg-carmine', 'bg-deepblue', 'bg-softwhite'];
-
 export const EmberButton: React.FC<ButtonProps> = ({
   children,
   variant = 'primary',
@@ -20,27 +18,9 @@ export const EmberButton: React.FC<ButtonProps> = ({
   disabled = false
 }) => {
   const [isHovered, setIsHovered] = useState(false);
-  const [burst, setBurst] = useState(false);
-
-  // Stationary ember particles (no movement)
-  const emberCount = burst ? 20 : isHovered ? 12 : 8;
-
-  // Generate stationary flame licks along button edges
-  const flameLicks = useMemo(() => {
-    return Array.from({ length: 4 }).map((_, i) => ({
-      left: `${15 + (i * 20) + Math.random() * 5}%`,
-      top: `${Math.random() < 0.5 ? -2 : 102}%`,
-      width: `${2 + Math.random() * 1}px`,
-      height: `${4 + Math.random() * 2}px`,
-      color: ['255,191,0', '255,140,0', '255,69,0'][Math.floor(Math.random() * 3)],
-      opacity: Math.random() * 0.3 + 0.4
-    }));
-  }, []);
 
   const handleClick = () => {
-    setBurst(true);
     onClick?.();
-    setTimeout(() => setBurst(false), 400);
   };
 
   const baseClasses = `
@@ -105,60 +85,6 @@ export const EmberButton: React.FC<ButtonProps> = ({
         ${disabled ? 'opacity-50 cursor-not-allowed' : ''}
       `}
     >
-      {/* Stationary flame licks along edges */}
-      {(isHovered || burst) && flameLicks.map((flame, i) => (
-        <div
-          key={`flame-${i}`}
-          className="absolute pointer-events-none z-5"
-          style={{
-            width: flame.width,
-            height: flame.height,
-            left: flame.left,
-            top: flame.top,
-            background: `linear-gradient(to top, rgb(${flame.color}), rgba(${flame.color}, 0.6), transparent)`,
-            borderRadius: '50% 50% 50% 50% / 60% 60% 40% 40%',
-            filter: 'blur(0.5px)',
-            mixBlendMode: 'screen',
-            opacity: flame.opacity
-          }}
-        />
-      ))}
-
-      {/* Stationary ember particles */}
-      {Array.from({ length: emberCount }).map((_, i) => {
-        const edge = Math.floor(Math.random() * 4);
-        const offset = (Math.random() - 0.5) * 30;
-
-        let x = 0, y = 0;
-        switch (edge) {
-          case 0: x = Math.random() * 100; y = 0 + offset; break;
-          case 1: x = 100 + offset; y = Math.random() * 100; break;
-          case 2: x = Math.random() * 100; y = 100 + offset; break;
-          case 3: x = 0 + offset; y = Math.random() * 100; break;
-        }
-
-        const colorClass = emberColors[i % emberColors.length];
-        const scaleFlicker = (0.7 + Math.random() * 0.6).toFixed(2);
-        const opacityFlicker = (0.3 + Math.random() * 0.5).toFixed(2);
-
-        return (
-          <span
-            key={i}
-            className={`
-              absolute w-[2px] h-[2px] ${colorClass} rounded-full pointer-events-none
-              mix-blend-screen
-            `}
-            style={{
-              left: `${x}%`,
-              top: `${y}%`,
-              opacity: opacityFlicker,
-              transform: `scale(${scaleFlicker})`,
-              filter: `brightness(${burst ? 3 : isHovered ? 2.5 : 2}) blur(0.5px) drop-shadow(0 0 2px currentColor)`,
-              boxShadow: `0 0 ${burst ? 4 : 2}px currentColor`
-            }}
-          />
-        );
-      })}
       <span className="relative z-10">{children}</span>
     </button>
   );

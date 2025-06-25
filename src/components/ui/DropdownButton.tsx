@@ -22,8 +22,6 @@ export const DropdownButton: React.FC<DropdownButtonProps> = ({
   className = '',
 }) => {
   const [open, setOpen] = useState(false);
-  const [hovered, setHovered] = useState(false);
-  const [burst, setBurst] = useState(false);
   const [selected, setSelected] = useState<string>(label);
   const [menuStyle, setMenuStyle] = useState<React.CSSProperties>({});
   const containerRef = useRef<HTMLDivElement>(null);
@@ -56,20 +54,6 @@ export const DropdownButton: React.FC<DropdownButtonProps> = ({
     }
   }, [open]);
 
-  // burst on open toggle
-  useEffect(() => {
-    if (open) {
-      setBurst(true);
-      const t = setTimeout(() => setBurst(false), 400);
-      return () => clearTimeout(t);
-    }
-  }, [open]);
-
-  const emberColors = ['bg-ember', 'bg-carmine', 'bg-deepblue', 'bg-softwhite'];
-
-  // Stationary bursts when hovered or burst (no movement)
-  const emberCount = burst ? 20 : hovered ? 10 : 0;
-
   const toggleOpen = () => setOpen(o => !o);
 
   const handleSelect = (opt: string) => {
@@ -87,8 +71,6 @@ export const DropdownButton: React.FC<DropdownButtonProps> = ({
         <button
           type="button"
           onClick={toggleOpen}
-          onMouseEnter={() => setHovered(true)}
-          onMouseLeave={() => setHovered(false)}
           className="
             group relative inline-flex items-center justify-between
             w-full px-4 py-2 font-body uppercase text-sm tracking-wide
@@ -98,37 +80,6 @@ export const DropdownButton: React.FC<DropdownButtonProps> = ({
             hover:shadow-ember
           "
         >
-          {/* Stationary ember bursts */}
-          {Array.from({ length: emberCount }).map((_, i) => {
-            const edge = Math.floor(Math.random() * 4);
-            const offset = (Math.random() - 0.5) * 20;
-            let x = 0, y = 0;
-            switch (edge) {
-              case 0: x = Math.random() * 100; y = offset; break;
-              case 1: x = 100 + offset; y = Math.random() * 100; break;
-              case 2: x = Math.random() * 100; y = 100 + offset; break;
-              default: x = offset; y = Math.random() * 100; break;
-            }
-            const color = emberColors[i % emberColors.length];
-
-            return (
-              <span
-                key={i}
-                className={`
-                  absolute w-[2px] h-[2px] ${color} rounded-sm
-                  pointer-events-none mix-blend-screen
-                `}
-                style={{
-                  left: `${x}%`,
-                  top: `${y}%`,
-                  opacity: 0.7,
-                  filter: 'brightness(2) blur(0.5px)',
-                  boxShadow: '0 0 2px currentColor'
-                }}
-              />
-            );
-          })}
-
           {/* Label */}
           <span className="relative z-10">{selected}</span>
 

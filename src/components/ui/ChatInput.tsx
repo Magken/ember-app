@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, CSSProperties, useMemo } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Send, Image, Mic, FileImage, X, Play, Pause, Volume2, Video, Upload } from 'lucide-react';
 import { IconedButton } from './IconedButton';
 import { uploadMediaFile } from '../../lib/messaging';
@@ -20,8 +20,6 @@ interface ChatInputProps {
   disabled?: boolean;
 }
 
-const emberColors = ['bg-ember', 'bg-carmine', 'bg-deepblue', 'bg-softwhite'];
-
 export const ChatInput: React.FC<ChatInputProps> = ({
   value,
   onChange,
@@ -31,7 +29,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   disabled = false
 }) => {
   const [focused, setFocused] = useState(false);
-  const [burst, setBurst] = useState(false);
   const [mediaFiles, setMediaFiles] = useState<MediaFile[]>([]);
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
@@ -45,29 +42,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const audioElementsRef = useRef<{ [key: string]: HTMLAudioElement }>({});
-
-  // Stable ember particle positions (only regenerate when count changes)
-  const stableEmberPositions = useMemo(() => {
-    const emberCount = burst ? 40 : 0;
-    return Array.from({ length: emberCount }).map(() => {
-      const edge = Math.floor(Math.random() * 4);
-      const offset = (Math.random() - 0.5) * 80;
-      let x = 0, y = 0;
-      switch (edge) {
-        case 0: x = Math.random() * 100; y = offset; break;
-        case 1: x = 100 + offset; y = Math.random() * 100; break;
-        case 2: x = Math.random() * 100; y = 100 + offset; break;
-        default: x = offset; y = Math.random() * 100; break;
-      }
-      const angle = Math.random() * Math.PI * 2;
-      const dist = 30;
-      const tx = Math.cos(angle) * dist;
-      const ty = Math.sin(angle) * dist - 8;
-      const color = emberColors[Math.floor(Math.random() * emberColors.length)];
-      
-      return { x, y, tx, ty, color };
-    });
-  }, [burst]); // Only regenerate when burst state changes
 
   // Auto-resize textarea
   useEffect(() => {
@@ -102,13 +76,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
   const handleSend = () => {
     if ((value.trim() || mediaFiles.length > 0) && !disabled && uploadingFiles.size === 0) {
-      setBurst(true);
       onSend(value, mediaFiles.length > 0 ? mediaFiles : undefined);
       
       // Clear media files after sending - but don't revoke URLs as they may be needed for display
       setMediaFiles([]);
-      
-      setTimeout(() => setBurst(false), 500);
     }
   };
 
@@ -410,25 +381,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
   return (
     <div className={`relative w-full space-y-3 ${className}`}>
-      {/* Stable ember particle system - only on send burst */}
-      {stableEmberPositions.map((ember, i) => (
-        <span
-          key={i}
-          className={`
-            absolute w-[1.5px] h-[1.5px] ${ember.color} rounded-sm
-            pointer-events-none mix-blend-screen
-          `}
-          style={{
-            left: `${ember.x}%`,
-            top: `${ember.y}%`,
-            filter: 'brightness(2.5) blur(0.5px)',
-            boxShadow: '0 0 3px currentColor',
-            zIndex: 5,
-            opacity: 0.8
-          } as CSSProperties}
-        />
-      ))}
-
       {/* Uploading Indicator */}
       {uploadingFiles.size > 0 && (
         <div className="p-3 bg-ember/20 rounded-soft border border-ember/50 flex items-center gap-3">

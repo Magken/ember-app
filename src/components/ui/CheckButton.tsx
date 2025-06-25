@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState } from 'react';
 
 interface CheckButtonProps {
   checked: boolean;
@@ -7,36 +7,16 @@ interface CheckButtonProps {
   className?: string;
 }
 
-const emberColors = ['bg-ember', 'bg-carmine', 'bg-deepblue', 'bg-softwhite'];
-
 export const CheckButton: React.FC<CheckButtonProps> = ({
   checked,
   onChange,
   label,
   className = ''
 }) => {
-  const [burst, setBurst] = useState(false);
   const [hovered, setHovered] = useState(false);
-  
-  // Generate stationary flame licks along checkbox edges
-  const flameLicks = useMemo(() => {
-    return Array.from({ length: 4 }).map((_, i) => ({
-      left: `${15 + (i * 20) + Math.random() * 5}%`,
-      top: `${Math.random() < 0.5 ? -3 : 103}%`,
-      width: `${1.5 + Math.random() * 1}px`,
-      height: `${3 + Math.random() * 2}px`,
-      color: ['255,191,0', '255,140,0', '255,69,0'][Math.floor(Math.random() * 3)],
-      opacity: Math.random() * 0.4 + 0.3
-    }));
-  }, []);
-  
-  // Stationary ember particles (no movement)
-  const emberCount = burst ? 12 : hovered ? 6 : 0;
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     onChange(e.target.checked);
-    setBurst(true);
-    setTimeout(() => setBurst(false), 500);
   };
 
   return (
@@ -74,53 +54,6 @@ export const CheckButton: React.FC<CheckButtonProps> = ({
           before:blur-lg before:scale-120
         `}
       >
-        {/* Stationary flame licks along edges */}
-        {(hovered || burst) && flameLicks.map((flame, i) => (
-          <div
-            key={`flame-${i}`}
-            className="absolute pointer-events-none z-5"
-            style={{
-              width: flame.width,
-              height: flame.height,
-              left: flame.left,
-              top: flame.top,
-              background: `linear-gradient(to top, rgb(${flame.color}), rgba(${flame.color}, 0.6), transparent)`,
-              borderRadius: '50% 50% 50% 50% / 60% 60% 40% 40%',
-              filter: 'blur(0.5px)',
-              mixBlendMode: 'screen',
-              opacity: flame.opacity
-            }}
-          />
-        ))}
-
-        {/* Stationary ember particles */}
-        {Array.from({ length: emberCount }).map((_, i) => {
-          const edge = Math.floor(Math.random() * 4);
-          const offset = (Math.random() - 0.5) * 25;
-          let x = 0, y = 0;
-          switch (edge) {
-            case 0: x = Math.random() * 100; y = offset; break;
-            case 1: x = 100 + offset; y = Math.random() * 100; break;
-            case 2: x = Math.random() * 100; y = 100 + offset; break;
-            default: x = offset; y = Math.random() * 100; break;
-          }
-          const color = emberColors[i % emberColors.length];
-
-          return (
-            <span
-              key={i}
-              className={`absolute w-[2px] h-[2px] ${color} rounded-full pointer-events-none mix-blend-screen`}
-              style={{
-                left: `${x}%`,
-                top: `${y}%`,
-                filter: `brightness(${burst ? 3 : 2}) blur(0.5px)`,
-                boxShadow: `0 0 ${burst ? 3 : 2}px currentColor`,
-                opacity: 0.6
-              }}
-            />
-          );
-        })}
-
         <div
           className={`
             w-full h-full
