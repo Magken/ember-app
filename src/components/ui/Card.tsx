@@ -34,7 +34,7 @@ export const BurningPaperCard: React.FC<CardProps> = ({
   className = ''
 }) => {
   // More controlled jagged clip-path with limited x-direction cuts
-  const { clipPath, points } = useMemo(() => {
+  const { clipPath } = useMemo(() => {
     // Limit x-direction cuts to max 15px (1.5% of 100% width for typical card sizes)
     const maxXCut = 1.5;
     
@@ -74,73 +74,14 @@ export const BurningPaperCard: React.FC<CardProps> = ({
     
     return {
       clipPath: `polygon(${pts.map(p => `${p.x}% ${p.y}%`).join(', ')})`,
-      points: pts
     };
-  }, []);
-
-  // Ember particles along burning edges
-  const emberParticles = useMemo(() => {
-    return Array.from({ length: 48 }).map((_, i) => {
-      const edgePt = points[randInt(0, points.length - 1)];
-      return {
-        left: `calc(${edgePt.x + rand(-4, 4)}%)`,
-        top: `calc(${edgePt.y + rand(-4, 4)}%)`,
-        delay: `${rand(0, 4)}s`,
-        duration: `${rand(1.5, 3)}s`,
-        size: `${rand(1, 2.5)}px`,
-        color: randColor(EMBER_COLORS),
-        blur: randInt(0, 2),
-        intensity: rand(0.6, 1)
-      };
-    });
-  }, [points]);
-
-  // Ash particles floating up
-  const ashParticles = useMemo(() => {
-    return Array.from({ length: 24 }).map(() => ({
-      left: `${rand(10, 90)}%`,
-      top: `${rand(80, 100)}%`,
-      delay: `${rand(0, 6)}s`,
-      duration: `${rand(3, 6)}s`,
-      size: `${rand(0.5, 1.5)}px`,
-      color: randColor(ASH_COLORS),
-      driftX: `${rand(-30, 30)}px`
-    }));
-  }, []);
-
-  // Flame licks along edges
-  const flameElements = useMemo(() => {
-    return Array.from({ length: 12 }).map((_, i) => {
-      const edgePt = points[randInt(0, points.length - 1)];
-      return {
-        left: `calc(${edgePt.x + rand(-2, 2)}%)`,
-        top: `calc(${edgePt.y + rand(-2, 2)}%)`,
-        delay: `${rand(0, 2)}s`,
-        duration: `${rand(0.6, 1.2)}s`,
-        width: `${rand(2, 4)}px`,
-        height: `${rand(4, 8)}px`,
-        color: randColor(EMBER_COLORS.slice(0, 3)) // Only warm colors for flames
-      };
-    });
-  }, [points]);
-
-  // Smoke wisps
-  const smokeWisps = useMemo(() => {
-    return Array.from({ length: 8 }).map(() => ({
-      left: `${rand(20, 80)}%`,
-      top: `${rand(5, 15)}%`,
-      delay: `${rand(0, 4)}s`,
-      duration: `${rand(4, 8)}s`,
-      size: `${rand(3, 6)}px`,
-      drift: `${rand(-20, 20)}px`
-    }));
   }, []);
 
   return (
     <div className={`relative overflow-visible ${className}`}>
-      {/* Charred paper background with burn progression */}
+      {/* Charred paper background with burn progression - NO ANIMATIONS */}
       <div
-        className="absolute inset-0 pointer-events-none z-0 burning-paper"
+        className="absolute inset-0 pointer-events-none z-0"
         style={{
           clipPath,
           WebkitClipPath: clipPath,
@@ -161,7 +102,7 @@ export const BurningPaperCard: React.FC<CardProps> = ({
         }}
       />
 
-      {/* Intense ember glow behind edges */}
+      {/* Static ember glow behind edges - NO ANIMATIONS */}
       <div
         className="absolute inset-0 pointer-events-none z-1"
         style={{
@@ -173,86 +114,7 @@ export const BurningPaperCard: React.FC<CardProps> = ({
         }}
       />
 
-      {/* Smoke wisps */}
-      {glowOnHover && smokeWisps.map((smoke, i) => (
-        <div
-          key={`smoke-${i}`}
-          className="absolute rounded-full pointer-events-none z-15 smoke-wisp"
-          style={{
-            width: smoke.size,
-            height: smoke.size,
-            backgroundColor: 'rgba(105, 105, 105, 0.6)',
-            left: smoke.left,
-            top: smoke.top,
-            filter: 'blur(2px)',
-            animationDelay: smoke.delay,
-            animationDuration: smoke.duration,
-            '--smoke-drift': smoke.drift
-          } as React.CSSProperties}
-        />
-      ))}
-
-      {/* Flame licks along edges */}
-      {glowOnHover && flameElements.map((flame, i) => (
-        <div
-          key={`flame-${i}`}
-          className="absolute pointer-events-none z-12 flame-flicker"
-          style={{
-            width: flame.width,
-            height: flame.height,
-            left: flame.left,
-            top: flame.top,
-            background: `linear-gradient(to top, rgb(${flame.color}), rgba(${flame.color}, 0.6), transparent)`,
-            borderRadius: '50% 50% 50% 50% / 60% 60% 40% 40%',
-            animationDelay: flame.delay,
-            animationDuration: flame.duration,
-            filter: 'blur(0.5px)',
-            mixBlendMode: 'screen'
-          } as React.CSSProperties}
-        />
-      ))}
-
-      {/* Enhanced ember particles */}
-      {glowOnHover && emberParticles.map((ember, i) => (
-        <span
-          key={`ember-${i}`}
-          className="absolute rounded-full pointer-events-none z-10 animate-ember"
-          style={{
-            width: ember.size,
-            height: ember.size,
-            backgroundColor: `rgb(${ember.color})`,
-            left: ember.left,
-            top: ember.top,
-            filter: `blur(${ember.blur}px) brightness(${ember.intensity + 0.5})`,
-            animationDelay: ember.delay,
-            animationDuration: ember.duration,
-            boxShadow: `0 0 ${ember.blur + 2}px rgb(${ember.color})`,
-            mixBlendMode: 'screen'
-          } as React.CSSProperties}
-        />
-      ))}
-
-      {/* Floating ash particles */}
-      {glowOnHover && ashParticles.map((ash, i) => (
-        <span
-          key={`ash-${i}`}
-          className="absolute rounded-full pointer-events-none z-8 ash-particle"
-          style={{
-            width: ash.size,
-            height: ash.size,
-            backgroundColor: `rgb(${ash.color})`,
-            left: ash.left,
-            top: ash.top,
-            filter: 'blur(0.5px)',
-            animationDelay: ash.delay,
-            animationDuration: ash.duration,
-            '--drift-x': ash.driftX,
-            opacity: 0.7
-          } as React.CSSProperties}
-        />
-      ))}
-
-      {/* Card content container with charred edges AND thin yellow glow */}
+      {/* Card content container with charred edges and static glow - NO ANIMATIONS */}
       <div
         className={`relative z-20 p-8 transition-all duration-500 overflow-visible ${
           glowOnHover ? 'hover:shadow-charred' : ''
@@ -275,8 +137,6 @@ export const BurningPaperCard: React.FC<CardProps> = ({
             inset 0 0 40px rgba(44, 24, 16, 0.4),
             0 0 15px rgba(255, 140, 0, 0.3)
           `,
-          // THIS IS THE THIN YELLOW EDGE GLOW YOU WANTED
-          animation: glowOnHover ? 'edgeGlowMix 2s ease-in-out infinite' : 'none'
         }}
       >
         {children}

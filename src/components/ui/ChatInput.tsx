@@ -495,7 +495,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         </div>
       )}
 
-      {/* Main Text Input and Send Button Container */}
+      {/* Main Text Input and Send Button Container - NO SPARKLES */}
       <div className={`
         relative flex items-end gap-3 p-3 md:p-4 rounded-soft
         bg-gradient-to-br from-navy/95 via-deepblue/85 to-navy/75
@@ -510,7 +510,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         before:blur-lg before:scale-105
       `}>
         
-        {/* Textarea - removed white film overlay, full opacity */}
+        {/* Textarea - NO SPARKLES */}
         <div className="flex-1 relative min-w-0">
           <textarea
             ref={textareaRef}
