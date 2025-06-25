@@ -1,11 +1,9 @@
-// src/components/ui/Datepicker.tsx
 import React, {
   useState,
   useRef,
   useEffect,
   useLayoutEffect,
   useMemo,
-  CSSProperties,
 } from 'react';
 import ReactDOM from 'react-dom';
 import { ChevronDown, ChevronUp, ChevronLeft, ChevronRight } from 'lucide-react';
@@ -21,10 +19,10 @@ export const Datepicker: React.FC<DatepickerProps> = ({
   onSelect,
   className = '',
 }) => {
-  const [open, setOpen]           = useState(false);
-  const [menuStyle, setMenuStyle] = useState<CSSProperties>({});
+  const [open, setOpen] = useState(false);
+  const [menuStyle, setMenuStyle] = useState<React.CSSProperties>({});
   const containerRef = useRef<HTMLDivElement>(null);
-  const menuRef      = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   // Sync viewDate
   const [viewDate, setViewDate] = useState<Date>(
@@ -53,30 +51,28 @@ export const Datepicker: React.FC<DatepickerProps> = ({
       const r = containerRef.current.getBoundingClientRect();
       setMenuStyle({
         position: 'absolute',
-        top:    r.bottom + window.scrollY,
-        left:   r.left   + window.scrollX,
-        width:  r.width,
+        top: r.bottom + window.scrollY,
+        left: r.left + window.scrollX,
+        width: r.width,
         zIndex: 9999,
       });
     }
   }, [open]);
 
   const toggleOpen = () => setOpen(o => !o);
-  const prevMonth  = () => setViewDate(d => new Date(d.getFullYear(), d.getMonth() - 1, 1));
-  const nextMonth  = () => setViewDate(d => new Date(d.getFullYear(), d.getMonth() + 1, 1));
+  const prevMonth = () => setViewDate(d => new Date(d.getFullYear(), d.getMonth() - 1, 1));
+  const nextMonth = () => setViewDate(d => new Date(d.getFullYear(), d.getMonth() + 1, 1));
 
   // Ember particles
-  const emberColors = ['bg-ember','bg-carmine','bg-deepblue','bg-softwhite'];
-  const randInt     = (min: number, max: number) =>
-    Math.floor(Math.random() * (max - min + 1)) + min;
+  const emberColors = ['bg-ember', 'bg-carmine', 'bg-deepblue', 'bg-softwhite'];
 
-  // While open, show continuous embers
-  const emberCount = open ? 30 : 0;
+  // Stationary embers while open (no movement)
+  const emberCount = open ? 15 : 0;
 
   // Build weeks
   const weeks = useMemo(() => {
     const start = new Date(viewDate.getFullYear(), viewDate.getMonth(), 1);
-    const end   = new Date(viewDate.getFullYear(), viewDate.getMonth() + 1, 0);
+    const end = new Date(viewDate.getFullYear(), viewDate.getMonth() + 1, 0);
     const arr: Date[][] = [];
     let week: Date[] = [];
     for (let i = 0; i < start.getDay(); i++) week.push(new Date(NaN));
@@ -107,24 +103,18 @@ export const Datepicker: React.FC<DatepickerProps> = ({
           hover:shadow-ember
         "
       >
-        {/* Continuous ember bursts */}
-        {[...Array(emberCount)].map((_, i) => {
-          const edge   = randInt(0, 3);
+        {/* Stationary ember bursts */}
+        {Array.from({ length: emberCount }).map((_, i) => {
+          const edge = Math.floor(Math.random() * 4);
           const offset = (Math.random() - 0.5) * 20;
           let x = 0, y = 0;
           switch (edge) {
             case 0: x = Math.random() * 100; y = offset; break;
-            case 1: x = 100 + offset;       y = Math.random() * 100; break;
-            case 2: x = Math.random() * 100; y = 100 + offset;       break;
-            default: x = offset;            y = Math.random() * 100; break;
+            case 1: x = 100 + offset; y = Math.random() * 100; break;
+            case 2: x = Math.random() * 100; y = 100 + offset; break;
+            default: x = offset; y = Math.random() * 100; break;
           }
-          const angle    = Math.random() * Math.PI * 2;
-          const dist     = 20 + Math.random() * 30;
-          const tx       = Math.cos(angle) * dist;
-          const ty       = Math.sin(angle) * dist;
-          const color    = emberColors[i % emberColors.length];
-          const delay    = (Math.random() * 0.3).toFixed(2);
-          const duration = (1 + Math.random()).toFixed(2);
+          const color = emberColors[i % emberColors.length];
 
           return (
             <span
@@ -132,26 +122,21 @@ export const Datepicker: React.FC<DatepickerProps> = ({
               className={`
                 absolute w-[2px] h-[2px] ${color} rounded-sm
                 pointer-events-none mix-blend-screen
-                animate-emberFromEdge
               `}
               style={{
-                left:                    `${x}%`,
-                top:                     `${y}%`,
-                animationDelay:          `${delay}s`,
-                animationDuration:       `${duration}s`,
-                animationIterationCount: 'infinite',
-                animationTimingFunction: 'ease-out',
-                animationFillMode:       'forwards',
-                '--tx':                  `${tx}px`,
-                '--ty':                  `${ty}px`,
-              } as CSSProperties}
+                left: `${x}%`,
+                top: `${y}%`,
+                opacity: 0.7,
+                filter: 'brightness(2) blur(0.5px)',
+                boxShadow: '0 0 2px currentColor'
+              }}
             />
           );
         })}
 
         <span className="relative z-10">{displayLabel}</span>
         {open
-          ? <ChevronUp   className="ml-2 w-4 h-4 relative z-10 text-[var(--color-ember)]" />
+          ? <ChevronUp className="ml-2 w-4 h-4 relative z-10 text-[var(--color-ember)]" />
           : <ChevronDown className="ml-2 w-4 h-4 relative z-10 text-[var(--color-ember)]" />
         }
       </button>
@@ -185,7 +170,7 @@ export const Datepicker: React.FC<DatepickerProps> = ({
 
       {/* Weekday labels */}
       <div className="grid grid-cols-7 gap-4 text-center text-sm text-softwhite mb-4">
-        {['Su','Mo','Tu','We','Th','Fr','Sa'].map(d => (
+        {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map(d => (
           <div key={d} className="font-body uppercase">{d}</div>
         ))}
       </div>

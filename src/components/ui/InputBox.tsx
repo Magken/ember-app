@@ -1,49 +1,42 @@
-// src/components/ui/InputBox.tsx
-import React, { useState, useRef, CSSProperties } from 'react';
+import React, { useState, useRef } from 'react';
 
 interface InputBoxProps {
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
   className?: string;
+  type?: string;
 }
 
 const emberColors = ['bg-ember', 'bg-carmine', 'bg-deepblue', 'bg-softwhite'];
-const randInt = (min: number, max: number) =>
-  Math.floor(Math.random() * (max - min + 1)) + min;
 
 export const InputBox: React.FC<InputBoxProps> = ({
   value,
   onChange,
   placeholder = '',
   className = '',
+  type = 'text'
 }) => {
   const [focused, setFocused] = useState(false);
-  const inputRef              = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
-  // When focused, we show a constant stream of embers
-  const emberCount = focused ? 100 : 0;
+  // Stationary ember particles when focused (no movement)
+  const emberCount = focused ? 50 : 0;
 
   return (
     <div className={`relative inline-block w-full ${className}`}>
-      {/* Continuous ember particles */}
-      {[...Array(emberCount)].map((_, i) => {
-        const edge   = randInt(0, 3);
+      {/* Stationary ember particles */}
+      {Array.from({ length: emberCount }).map((_, i) => {
+        const edge = Math.floor(Math.random() * 4);
         const offset = (Math.random() - 0.5) * 100;
         let x = 0, y = 0;
         switch (edge) {
           case 0: x = Math.random() * 100; y = offset; break;
-          case 1: x = 100 + offset;       y = Math.random() * 100; break;
-          case 2: x = Math.random() * 100; y = 100 + offset;       break;
-          default: x = offset;            y = Math.random() * 100; break;
+          case 1: x = 100 + offset; y = Math.random() * 100; break;
+          case 2: x = Math.random() * 100; y = 100 + offset; break;
+          default: x = offset; y = Math.random() * 100; break;
         }
-        const angle    = Math.random() * Math.PI * 2;
-        const dist     = 10 + Math.random() * 10;
-        const tx       = Math.cos(angle) * dist;
-        const ty       = Math.sin(angle) * dist;
-        const color    = emberColors[i % emberColors.length];
-        const delay    = (Math.random() * 0.5).toFixed(2);
-        const duration = (1 + Math.random() * 1).toFixed(2);
+        const color = emberColors[i % emberColors.length];
 
         return (
           <span
@@ -55,15 +48,10 @@ export const InputBox: React.FC<InputBoxProps> = ({
             style={{
               left: `${x}%`,
               top: `${y}%`,
-              animationName: 'emberFromEdge',
-              animationDelay: `${delay}s`,
-              animationDuration: `${duration}s`,
-              animationIterationCount: 'infinite',
-              animationTimingFunction: 'ease-out',
-              animationFillMode: 'forwards',
-              '--tx': `${tx}px`,
-              '--ty': `${ty}px`,
-            } as CSSProperties}
+              opacity: 0.6,
+              filter: 'brightness(2) blur(0.5px)',
+              boxShadow: '0 0 2px currentColor'
+            }}
           />
         );
       })}
@@ -71,7 +59,7 @@ export const InputBox: React.FC<InputBoxProps> = ({
       {/* Actual text input */}
       <input
         ref={inputRef}
-        type="text"
+        type={type}
         value={value}
         onChange={e => onChange(e.target.value)}
         onFocus={() => setFocused(true)}

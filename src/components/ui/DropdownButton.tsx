@@ -1,10 +1,8 @@
-// src/components/ui/DropdownButton.tsx
 import React, {
   useState,
   useRef,
   useEffect,
   useLayoutEffect,
-  CSSProperties,
 } from 'react';
 import ReactDOM from 'react-dom';
 import { ChevronDown, ChevronUp } from 'lucide-react';
@@ -23,13 +21,13 @@ export const DropdownButton: React.FC<DropdownButtonProps> = ({
   onSelect,
   className = '',
 }) => {
-  const [open, setOpen]         = useState(false);
-  const [hovered, setHovered]   = useState(false);
-  const [burst, setBurst]       = useState(false);
+  const [open, setOpen] = useState(false);
+  const [hovered, setHovered] = useState(false);
+  const [burst, setBurst] = useState(false);
   const [selected, setSelected] = useState<string>(label);
-  const [menuStyle, setMenuStyle] = useState<CSSProperties>({});
+  const [menuStyle, setMenuStyle] = useState<React.CSSProperties>({});
   const containerRef = useRef<HTMLDivElement>(null);
-  const menuRef      = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   // close on outside click (ignore inside)
   useEffect(() => {
@@ -50,9 +48,9 @@ export const DropdownButton: React.FC<DropdownButtonProps> = ({
       const r = containerRef.current.getBoundingClientRect();
       setMenuStyle({
         position: 'absolute',
-        top:    r.bottom + window.scrollY,
-        left:   r.left   + window.scrollX,
-        width:  r.width,
+        top: r.bottom + window.scrollY,
+        left: r.left + window.scrollX,
+        width: r.width,
         zIndex: 9999,
       });
     }
@@ -67,16 +65,10 @@ export const DropdownButton: React.FC<DropdownButtonProps> = ({
     }
   }, [open]);
 
-  const emberColors = ['bg-ember','bg-carmine','bg-deepblue','bg-softwhite'];
-  const randInt     = (min: number, max: number) =>
-    Math.floor(Math.random() * (max - min + 1)) + min;
+  const emberColors = ['bg-ember', 'bg-carmine', 'bg-deepblue', 'bg-softwhite'];
 
-  // continuous bursts when hovered, plus one‐off burst on open
-  const emberCount = burst
-    ? 40
-    : hovered
-      ? 20
-      : 0;
+  // Stationary bursts when hovered or burst (no movement)
+  const emberCount = burst ? 20 : hovered ? 10 : 0;
 
   const toggleOpen = () => setOpen(o => !o);
 
@@ -106,9 +98,9 @@ export const DropdownButton: React.FC<DropdownButtonProps> = ({
             hover:shadow-ember
           "
         >
-          {/* Ember bursts */}
-          {[...Array(emberCount)].map((_, i) => {
-            const edge   = randInt(0, 3);
+          {/* Stationary ember bursts */}
+          {Array.from({ length: emberCount }).map((_, i) => {
+            const edge = Math.floor(Math.random() * 4);
             const offset = (Math.random() - 0.5) * 20;
             let x = 0, y = 0;
             switch (edge) {
@@ -117,32 +109,22 @@ export const DropdownButton: React.FC<DropdownButtonProps> = ({
               case 2: x = Math.random() * 100; y = 100 + offset; break;
               default: x = offset; y = Math.random() * 100; break;
             }
-            const angle    = Math.random() * Math.PI * 2;
-            const dist     = 20 + Math.random() * 30;
-            const tx       = Math.cos(angle) * dist;
-            const ty       = Math.sin(angle) * dist;
-            const color    = emberColors[i % emberColors.length];
-            const delay    = (Math.random() * 0.3).toFixed(2);
-            const duration = (0.4 + Math.random() * 0.4).toFixed(2);
+            const color = emberColors[i % emberColors.length];
 
             return (
               <span
                 key={i}
                 className={`
                   absolute w-[2px] h-[2px] ${color} rounded-sm
-                  pointer-events-none animate-emberFromEdge mix-blend-screen
+                  pointer-events-none mix-blend-screen
                 `}
                 style={{
-                  left:              `${x}%`,
-                  top:               `${y}%`,
-                  animationDelay:    `${delay}s`,
-                  animationDuration: `${duration}s`,
-                  animationIterationCount: 'infinite',
-                  animationTimingFunction: 'ease-out',
-                  animationFillMode: 'forwards',
-                  '--tx':            `${tx}px`,
-                  '--ty':            `${ty}px`,
-                } as CSSProperties}
+                  left: `${x}%`,
+                  top: `${y}%`,
+                  opacity: 0.7,
+                  filter: 'brightness(2) blur(0.5px)',
+                  boxShadow: '0 0 2px currentColor'
+                }}
               />
             );
           })}

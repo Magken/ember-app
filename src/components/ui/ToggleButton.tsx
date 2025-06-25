@@ -18,21 +18,20 @@ export const ToggleButton: React.FC<ToggleButtonProps> = ({
   const [burst, setBurst] = useState(false);
   const [hovered, setHovered] = useState(false);
   
-  // Generate flame licks along toggle edges
+  // Generate stationary flame licks along toggle edges
   const flameLicks = useMemo(() => {
-    return Array.from({ length: 8 }).map((_, i) => ({
-      left: `${8 + (i * 10) + Math.random() * 5}%`,
+    return Array.from({ length: 6 }).map((_, i) => ({
+      left: `${8 + (i * 12) + Math.random() * 5}%`,
       top: `${Math.random() < 0.5 ? -3 : 103}%`,
-      delay: `${Math.random() * 2}s`,
-      duration: `${0.5 + Math.random() * 0.4}s`,
       width: `${1.5 + Math.random() * 1.5}px`,
       height: `${3 + Math.random() * 2}px`,
-      color: ['255,191,0', '255,140,0', '255,69,0'][Math.floor(Math.random() * 3)]
+      color: ['255,191,0', '255,140,0', '255,69,0'][Math.floor(Math.random() * 3)],
+      opacity: Math.random() * 0.4 + 0.3
     }));
   }, []);
   
-  // Reduced ember counts by 50%
-  const emberCount = burst ? 20 : hovered ? 10 : 0;
+  // Stationary ember particles (no movement)
+  const emberCount = burst ? 12 : hovered ? 6 : 0;
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     onChange(e.target.checked);
@@ -76,11 +75,11 @@ export const ToggleButton: React.FC<ToggleButtonProps> = ({
         after:opacity-0 hover:after:opacity-50
         after:blur-lg after:scale-120
       `}>
-        {/* Flame licks along edges */}
+        {/* Stationary flame licks along edges */}
         {(hovered || burst) && flameLicks.map((flame, i) => (
           <div
             key={`flame-${i}`}
-            className="absolute pointer-events-none z-5 flame-lick"
+            className="absolute pointer-events-none z-5"
             style={{
               width: flame.width,
               height: flame.height,
@@ -88,15 +87,15 @@ export const ToggleButton: React.FC<ToggleButtonProps> = ({
               top: flame.top,
               background: `linear-gradient(to top, rgb(${flame.color}), rgba(${flame.color}, 0.6), transparent)`,
               borderRadius: '50% 50% 50% 50% / 60% 60% 40% 40%',
-              animationDelay: flame.delay,
-              animationDuration: flame.duration,
               filter: 'blur(0.5px)',
-              mixBlendMode: 'screen'
-            } as React.CSSProperties}
+              mixBlendMode: 'screen',
+              opacity: flame.opacity
+            }}
           />
         ))}
 
-        {[...Array(emberCount)].map((_, i) => {
+        {/* Stationary ember particles */}
+        {Array.from({ length: emberCount }).map((_, i) => {
           const edge = Math.floor(Math.random() * 4);
           const offset = (Math.random() - 0.5) * 25;
           let x = 0, y = 0;
@@ -106,34 +105,22 @@ export const ToggleButton: React.FC<ToggleButtonProps> = ({
             case 2: x = Math.random() * 100; y = 100 + offset; break;
             default: x = offset; y = Math.random() * 100; break;
           }
-          const angle = Math.random() * Math.PI * 2;
-          const dist = burst ? 35 : 20;
-          const tx = Math.cos(angle) * dist;
-          const ty = Math.sin(angle) * dist - 3; // Slight upward drift
           const color = emberColors[i % emberColors.length];
-          const delay = (Math.random() * 0.3).toFixed(2);
-          const duration = (burst ? 0.9 : 2.5) + Math.random() * 0.8;
 
           return (
             <span
               key={i}
               className={`
                 absolute w-[2px] h-[2px] ${color} rounded-full
-                pointer-events-none animate-emberFromEdge mix-blend-screen
+                pointer-events-none mix-blend-screen
               `}
               style={{
                 left: `${x}%`,
                 top: `${y}%`,
-                animationDelay: `${delay}s`,
-                animationDuration: `${duration}s`,
-                animationTimingFunction: 'ease-out',
-                animationIterationCount: '1',
-                animationFillMode: 'forwards',
-                '--tx': `${tx}px`,
-                '--ty': `${ty}px`,
                 filter: `brightness(${burst ? 3 : 2}) blur(0.5px)`,
-                boxShadow: `0 0 ${burst ? 3 : 2}px currentColor`
-              } as React.CSSProperties}
+                boxShadow: `0 0 ${burst ? 3 : 2}px currentColor`,
+                opacity: 0.6
+              }}
             />
           );
         })}
