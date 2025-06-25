@@ -230,8 +230,13 @@ export const Hearth: React.FC<HearthProps> = ({
     }
   };
 
-  // Mouse drag handlers for panning
+  // Enhanced mouse drag handlers for panning with Ctrl+Click requirement
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    // Only allow panning with Ctrl+Click on desktop
+    if (!e.ctrlKey) {
+      return;
+    }
+
     const target = e.target as HTMLElement;
     
     // Allow events to reach buttons and flames
@@ -263,30 +268,41 @@ export const Hearth: React.FC<HearthProps> = ({
     setIsDragging(false);
   }, []);
 
-  // Touch handlers for mobile panning
+  // Enhanced touch handlers for mobile panning with two-finger requirement
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
-    if (e.touches.length === 1) {
-      const target = e.target as HTMLElement;
-      
-      // Allow events to reach buttons and flames
-      if (target.closest('button') || target.closest('.flame-container')) {
-        return;
-      }
-
-      const touch = e.touches[0];
-      setIsDragging(true);
-      setDragStart({ x: touch.clientX, y: touch.clientY });
-      setPanStart({ x: panX, y: panY });
-      e.preventDefault();
+    // Only allow panning with two fingers on mobile
+    if (e.touches.length !== 2) {
+      return;
     }
+
+    const target = e.target as HTMLElement;
+    
+    // Allow events to reach buttons and flames
+    if (target.closest('button') || target.closest('.flame-container')) {
+      return;
+    }
+
+    const touch1 = e.touches[0];
+    const touch2 = e.touches[1];
+    const centerX = (touch1.clientX + touch2.clientX) / 2;
+    const centerY = (touch1.clientY + touch2.clientY) / 2;
+
+    setIsDragging(true);
+    setDragStart({ x: centerX, y: centerY });
+    setPanStart({ x: panX, y: panY });
+    e.preventDefault();
   }, [panX, panY]);
 
   const handleTouchMove = useCallback((e: TouchEvent) => {
-    if (!isDragging || e.touches.length !== 1) return;
+    if (!isDragging || e.touches.length !== 2) return;
 
-    const touch = e.touches[0];
-    const deltaX = touch.clientX - dragStart.x;
-    const deltaY = touch.clientY - dragStart.y;
+    const touch1 = e.touches[0];
+    const touch2 = e.touches[1];
+    const centerX = (touch1.clientX + touch2.clientX) / 2;
+    const centerY = (touch1.clientY + touch2.clientY) / 2;
+
+    const deltaX = centerX - dragStart.x;
+    const deltaY = centerY - dragStart.y;
 
     setPanX(panStart.x + deltaX / zoom);
     setPanY(panStart.y + deltaY / zoom);
@@ -401,22 +417,6 @@ export const Hearth: React.FC<HearthProps> = ({
         />
       </div>
 
-      {/* Bolt Logo - Below Refresh Button */}
-      <div className="absolute top-28 left-4 z-50 pointer-events-auto">
-        <a 
-          href="https://bolt.new" 
-          target="_blank" 
-          rel="noopener noreferrer"
-          className="block hover:opacity-80 transition-opacity"
-        >
-          <img 
-            src="/logotext_poweredby_360w.png" 
-            alt="Powered by Bolt" 
-            className="h-6 w-auto"
-          />
-        </a>
-      </div>
-
       {/* Zoom Level Indicator */}
       <div className="absolute bottom-4 right-4 z-20 px-2 py-1 bg-navy/80 text-softwhite text-xs rounded border border-ember/30 pointer-events-none">
         {Math.round(zoom * 100)}%
@@ -424,7 +424,8 @@ export const Hearth: React.FC<HearthProps> = ({
 
       {/* Pan Instructions */}
       <div className="absolute bottom-4 left-4 z-20 px-2 py-1 bg-navy/80 text-ash text-xs rounded border border-ember/30 pointer-events-none">
-        Drag to pan • 100px spacing
+        <div className="hidden md:block">Ctrl+Drag to pan • 100px spacing</div>
+        <div className="md:hidden">Two fingers to pan • 100px spacing</div>
       </div>
 
       {/* Hearth Canvas with Pure Black Background */}
