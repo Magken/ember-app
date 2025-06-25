@@ -64,7 +64,7 @@ export const Flame: React.FC<FlameProps> = ({
   const colorPalette = isWeak ? WEAK_COLORS : EMBER_COLORS;
   const primaryColor = isWeak ? '139,69,19' : isStrong ? '255,191,0' : '255,140,0';
   
-  // Generate ember particles radiating outward in perfect radial pattern
+  // Generate ember particles radiating outward in perfect radial pattern with movement
   const emberParticles = useMemo(() => {
     return Array.from({ length: particleCount }).map((_, i) => {
       // Create perfect radial distribution
