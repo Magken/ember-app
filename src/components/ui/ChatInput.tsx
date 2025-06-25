@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, CSSProperties } from 'react';
+import React, { useState, useRef, useEffect, CSSProperties, useMemo } from 'react';
 import { Send, Image, Mic, FileImage, X, Play, Pause, Volume2, Video, Upload } from 'lucide-react';
 import { IconedButton } from './IconedButton';
 import { uploadMediaFile } from '../../lib/messaging';
@@ -21,8 +21,6 @@ interface ChatInputProps {
 }
 
 const emberColors = ['bg-ember', 'bg-carmine', 'bg-deepblue', 'bg-softwhite'];
-const randInt = (min: number, max: number) =>
-  Math.floor(Math.random() * (max - min + 1)) + min;
 
 export const ChatInput: React.FC<ChatInputProps> = ({
   value,
@@ -47,6 +45,29 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const audioElementsRef = useRef<{ [key: string]: HTMLAudioElement }>({});
+
+  // Stable ember particle positions (only regenerate when count changes)
+  const stableEmberPositions = useMemo(() => {
+    const emberCount = burst ? 40 : 0;
+    return Array.from({ length: emberCount }).map(() => {
+      const edge = Math.floor(Math.random() * 4);
+      const offset = (Math.random() - 0.5) * 80;
+      let x = 0, y = 0;
+      switch (edge) {
+        case 0: x = Math.random() * 100; y = offset; break;
+        case 1: x = 100 + offset; y = Math.random() * 100; break;
+        case 2: x = Math.random() * 100; y = 100 + offset; break;
+        default: x = offset; y = Math.random() * 100; break;
+      }
+      const angle = Math.random() * Math.PI * 2;
+      const dist = 30;
+      const tx = Math.cos(angle) * dist;
+      const ty = Math.sin(angle) * dist - 8;
+      const color = emberColors[Math.floor(Math.random() * emberColors.length)];
+      
+      return { x, y, tx, ty, color };
+    });
+  }, [burst]); // Only regenerate when burst state changes
 
   // Auto-resize textarea
   useEffect(() => {
@@ -387,55 +408,26 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
   };
 
-  // Only show ember particles on burst (send), not during typing
-  const emberCount = burst ? 40 : 0;
-
   return (
     <div className={`relative w-full space-y-3 ${className}`}>
-      {/* Controlled ember particle system - only on send burst */}
-      {Array.from({ length: emberCount }).map((_, i) => {
-        const edge = randInt(0, 3);
-        const offset = (Math.random() - 0.5) * 80;
-        let x = 0, y = 0;
-        switch (edge) {
-          case 0: x = Math.random() * 100; y = offset; break;
-          case 1: x = 100 + offset; y = Math.random() * 100; break;
-          case 2: x = Math.random() * 100; y = 100 + offset; break;
-          default: x = offset; y = Math.random() * 100; break;
-        }
-        const angle = Math.random() * Math.PI * 2;
-        const dist = 30;
-        const tx = Math.cos(angle) * dist;
-        const ty = Math.sin(angle) * dist - 8;
-        const color = emberColors[i % emberColors.length];
-        const delay = (Math.random() * 0.2).toFixed(2);
-        const duration = 0.6 + Math.random() * 0.3;
-
-        return (
-          <span
-            key={i}
-            className={`
-              absolute w-[1.5px] h-[1.5px] ${color} rounded-sm
-              pointer-events-none mix-blend-screen
-            `}
-            style={{
-              left: `${x}%`,
-              top: `${y}%`,
-              animationName: 'emberFromEdge',
-              animationDelay: `${delay}s`,
-              animationDuration: `${duration}s`,
-              animationIterationCount: '1',
-              animationTimingFunction: 'ease-out',
-              animationFillMode: 'forwards',
-              '--tx': `${tx}px`,
-              '--ty': `${ty}px`,
-              filter: 'brightness(2.5) blur(0.5px)',
-              boxShadow: '0 0 3px currentColor',
-              zIndex: 5
-            } as CSSProperties}
-          />
-        );
-      })}
+      {/* Stable ember particle system - only on send burst */}
+      {stableEmberPositions.map((ember, i) => (
+        <span
+          key={i}
+          className={`
+            absolute w-[1.5px] h-[1.5px] ${ember.color} rounded-sm
+            pointer-events-none mix-blend-screen
+          `}
+          style={{
+            left: `${ember.x}%`,
+            top: `${ember.y}%`,
+            filter: 'brightness(2.5) blur(0.5px)',
+            boxShadow: '0 0 3px currentColor',
+            zIndex: 5,
+            opacity: 0.8
+          } as CSSProperties}
+        />
+      ))}
 
       {/* Uploading Indicator */}
       {uploadingFiles.size > 0 && (
