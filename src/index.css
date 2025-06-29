@@ -21,31 +21,6 @@
   -ms-overflow-style: none;
 }
 
-/* Optimized internal sparkle animation */
-@keyframes internalSparkle {
-  0% {
-    opacity: 0;
-    transform: translate(-50%, -50%) scale(0.6);
-  }
-  20% {
-    opacity: 1;
-  }
-  80% {
-    opacity: 0.8;
-  }
-  100% {
-    opacity: 0;
-    transform: translate(-50%, -50%) translateY(-20px) scale(1.2);
-  }
-}
-
-.animate-internal-sparkle {
-  animation-name: internalSparkle;
-  animation-timing-function: ease-out;
-  animation-iteration-count: infinite;
-  will-change: transform, opacity;
-}
-
 @keyframes emberFromEdge {
   0% {
     opacity: 1;
