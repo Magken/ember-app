@@ -515,7 +515,7 @@ export const LiveChatBox: React.FC<LiveChatBoxProps> = ({
                 className={`flex ${msg.sender_id === contactUserId ? 'justify-start' : 'justify-end'} relative z-60`}
               >
                 <div className={`max-w-[85%] md:max-w-[70%] ${msg.sender_id === contactUserId ? 'order-1' : 'order-2'}`}>
-                  {/* Message bubble */}
+                  {/* Message bubble - NO EMBER PARTICLES */}
                   <div
                     className={`
                       relative p-3 rounded-lg overflow-visible z-60
@@ -525,23 +525,6 @@ export const LiveChatBox: React.FC<LiveChatBoxProps> = ({
                       }
                     `}
                   >
-                    {/* Ember particles for sent messages */}
-                    {msg.sender_id !== contactUserId && Array.from({ length: 8 }).map((_, i) => (
-                      <span
-                        key={i}
-                        className="absolute w-[1px] h-[1px] bg-ember rounded-full pointer-events-none animate-ember z-65"
-                        style={{
-                          left: `${Math.random() * 100}%`,
-                          top: `${Math.random() * 100}%`,
-                          animationDelay: `${Math.random() * 2}s`,
-                          animationDuration: `${2 + Math.random() * 2}s`,
-                          filter: 'blur(0.5px) brightness(2)',
-                          boxShadow: '0 0 2px currentColor',
-                          mixBlendMode: 'screen'
-                        } as React.CSSProperties}
-                      />
-                    ))}
-                    
                     {/* Text content */}
                     {msg.content && (
                       <TextBlock className="text-sm relative z-70 break-words mb-2">{msg.content}</TextBlock>
