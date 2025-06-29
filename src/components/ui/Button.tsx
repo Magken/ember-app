@@ -1,4 +1,6 @@
 import React, { useState, useMemo } from 'react';
+import { InternalEmbers } from './InternalEmbers';
+import { InternalFlameLicks } from './InternalFlameLicks';
 
 interface ButtonProps {
   children: React.ReactNode;
@@ -6,38 +8,46 @@ interface ButtonProps {
   size?: 'sm' | 'md' | 'lg';
   onClick?: () => void;
   className?: string;
+  disabled?: boolean;
 }
-
-const emberColors = ['bg-ember', 'bg-carmine', 'bg-deepblue', 'bg-softwhite'];
 
 export const EmberButton: React.FC<ButtonProps> = ({
   children,
   variant = 'primary',
   size = 'md',
   onClick,
-  className = ''
+  className = '',
+  disabled = false
 }) => {
   const [isHovered, setIsHovered] = useState(false);
   const [burst, setBurst] = useState(false);
   const [glowReplay, setGlowReplay] = useState(false);
 
-  // Reduced ember counts by 50%
-  const emberCount = burst ? 60 : isHovered ? 40 : 30;
+  // Generate component ID for seeded randomness
+  const componentId = useMemo(() => `button-${variant}-${size}`, [variant, size]);
 
-  // Generate flame licks along button edges
-  const flameLicks = useMemo(() => {
-    return Array.from({ length: 8 }).map((_, i) => ({
-      left: `${10 + (i * 10) + Math.random() * 5}%`,
-      top: `${Math.random() < 0.5 ? -2 : 102}%`,
-      delay: `${Math.random() * 2}s`,
-      duration: `${0.6 + Math.random() * 0.4}s`,
-      width: `${2 + Math.random() * 2}px`,
-      height: `${4 + Math.random() * 3}px`,
-      color: ['255,191,0', '255,140,0', '255,69,0'][Math.floor(Math.random() * 3)]
-    }));
-  }, []);
+  // Reduced ember configuration (60% reduction)
+  const emberConfig = useMemo(() => ({
+    count: burst ? 20 : isHovered ? 8 : 0,
+    size: { min: 1, max: 2 },
+    colors: ['255,191,0', '255,140,0', '255,69,0'],
+    driftRange: { x: { min: -15, max: 15 }, y: { min: -20, max: -5 } },
+    duration: { min: 1, max: 2 },
+    delayRange: { min: 0, max: 0.5 }
+  }), [burst, isHovered]);
+
+  // Reduced flame lick configuration (50% reduction)
+  const flameLickConfig = useMemo(() => ({
+    count: 4,
+    size: { width: { min: 1.5, max: 2.5 }, height: { min: 3, max: 5 } },
+    colors: ['255,191,0', '255,140,0', '255,69,0'],
+    duration: { min: 0.6, max: 1.2 },
+    delayRange: { min: 0, max: 1 },
+    positionRange: { x: { min: 5, max: 95 }, y: { min: -5, max: 105 } }
+  }), []);
 
   const handleClick = () => {
+    if (disabled) return;
     setBurst(true);
     setGlowReplay(true);
     onClick?.();
@@ -97,89 +107,32 @@ export const EmberButton: React.FC<ButtonProps> = ({
   return (
     <button
       onClick={handleClick}
-      onMouseEnter={() => setIsHovered(true)}
+      onMouseEnter={() => !disabled && setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
+      disabled={disabled}
       className={`
         ${baseClasses}
         ${variantMap[variant]}
         ${sizeMap[size]}
+        ${disabled ? 'opacity-50 cursor-not-allowed' : ''}
         ${className}
         ${glowReplay ? 'hover' : ''}
       `}
     >
-      {/* Flame licks along edges */}
-      {(isHovered || burst) && flameLicks.map((flame, i) => (
-        <div
-          key={`flame-${i}`}
-          className="absolute pointer-events-none z-5 flame-lick"
-          style={{
-            width: flame.width,
-            height: flame.height,
-            left: flame.left,
-            top: flame.top,
-            background: `linear-gradient(to top, rgb(${flame.color}), rgba(${flame.color}, 0.6), transparent)`,
-            borderRadius: '50% 50% 50% 50% / 60% 60% 40% 40%',
-            animationDelay: flame.delay,
-            animationDuration: flame.duration,
-            filter: 'blur(0.5px)',
-            mixBlendMode: 'screen'
-          } as React.CSSProperties}
-        />
-      ))}
+      {/* Internal ember system */}
+      <InternalEmbers
+        componentId={componentId}
+        config={emberConfig}
+        enabled={emberConfig.count > 0 && !disabled}
+      />
+      
+      {/* Internal flame lick system */}
+      <InternalFlameLicks
+        componentId={componentId}
+        config={flameLickConfig}
+        enabled={(isHovered || burst) && !disabled}
+      />
 
-      {[...Array(emberCount)].map((_, i) => {
-        const edge = Math.floor(Math.random() * 4);
-        const offset = (Math.random() - 0.5) * 30;
-
-        let x = 0, y = 0;
-        switch (edge) {
-          case 0: x = Math.random() * 100; y = 0 + offset; break;
-          case 1: x = 100 + offset; y = Math.random() * 100; break;
-          case 2: x = Math.random() * 100; y = 100 + offset; break;
-          case 3: x = 0 + offset; y = Math.random() * 100; break;
-        }
-
-        // Slower, more campfire-like motion
-        const motionScale = burst ? 60 : isHovered ? 40 : 25;
-        const angle = Math.random() * 2 * Math.PI;
-        const translateX = Math.cos(angle) * motionScale;
-        const translateY = Math.sin(angle) * motionScale - 10; // Slight upward drift
-
-        const colorClass = emberColors[i % emberColors.length];
-        const delay = (Math.random() * 3).toFixed(2);
-        const duration = burst
-          ? (0.8 + Math.random() * 0.4).toFixed(2)
-          : isHovered
-            ? (1.5 + Math.random() * 1).toFixed(2)
-            : (3 + Math.random() * 2).toFixed(2);
-
-        const scaleFlicker = (0.7 + Math.random() * 0.6).toFixed(2);
-        const opacityFlicker = (0.3 + Math.random() * 0.5).toFixed(2);
-
-        return (
-          <span
-            key={i}
-            className={`
-              absolute w-[2px] h-[2px] ${colorClass} rounded-full pointer-events-none
-              animate-emberFromEdge mix-blend-screen
-            `}
-            style={{
-              left: `${x}%`,
-              top: `${y}%`,
-              animationDelay: `${delay}s`,
-              animationDuration: `${duration}s`,
-              animationIterationCount: 'infinite',
-              animationTimingFunction: 'ease-out',
-              '--tx': `${translateX}px`,
-              '--ty': `${translateY}px`,
-              opacity: opacityFlicker,
-              transform: `scale(${scaleFlicker})`,
-              filter: `brightness(${burst ? 3 : isHovered ? 2.5 : 2}) blur(0.5px) drop-shadow(0 0 2px currentColor)`,
-              boxShadow: `0 0 ${burst ? 4 : 2}px currentColor`
-            } as React.CSSProperties}
-          />
-        );
-      })}
       <span className="relative z-10">{children}</span>
     </button>
   );

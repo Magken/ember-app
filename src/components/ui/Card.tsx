@@ -1,5 +1,6 @@
-// BurningPaperCard.tsx
 import React, { useMemo } from 'react';
+import { InternalEmbers } from './InternalEmbers';
+import { InternalFlameLicks } from './InternalFlameLicks';
 
 interface CardProps {
   children: React.ReactNode;
@@ -78,26 +79,31 @@ export const BurningPaperCard: React.FC<CardProps> = ({
     };
   }, []);
 
-  // Ember particles along burning edges
-  const emberParticles = useMemo(() => {
-    return Array.from({ length: 48 }).map((_, i) => {
-      const edgePt = points[randInt(0, points.length - 1)];
-      return {
-        left: `calc(${edgePt.x + rand(-4, 4)}%)`,
-        top: `calc(${edgePt.y + rand(-4, 4)}%)`,
-        delay: `${rand(0, 4)}s`,
-        duration: `${rand(1.5, 3)}s`,
-        size: `${rand(1, 2.5)}px`,
-        color: randColor(EMBER_COLORS),
-        blur: randInt(0, 2),
-        intensity: rand(0.6, 1)
-      };
-    });
-  }, [points]);
+  const componentId = useMemo(() => `card-${glowOnHover ? 'glow' : 'static'}`, [glowOnHover]);
+
+  // Reduced ember configuration (60% reduction)
+  const emberConfig = useMemo(() => ({
+    count: glowOnHover ? 20 : 12,
+    size: { min: 0.8, max: 1.5 },
+    colors: EMBER_COLORS,
+    driftRange: { x: { min: -20, max: 20 }, y: { min: -30, max: -10 } },
+    duration: { min: 1.5, max: 3 },
+    delayRange: { min: 0, max: 2 }
+  }), [glowOnHover]);
+
+  // Reduced flame lick configuration (33% reduction)
+  const flameLickConfig = useMemo(() => ({
+    count: 8,
+    size: { width: { min: 1.5, max: 3 }, height: { min: 4, max: 8 } },
+    colors: EMBER_COLORS.slice(0, 3),
+    duration: { min: 0.8, max: 1.5 },
+    delayRange: { min: 0, max: 1.5 },
+    positionRange: { x: { min: 0, max: 100 }, y: { min: 0, max: 100 } }
+  }), []);
 
   // Ash particles floating up
   const ashParticles = useMemo(() => {
-    return Array.from({ length: 24 }).map(() => ({
+    return Array.from({ length: 12 }).map(() => ({
       left: `${rand(10, 90)}%`,
       top: `${rand(80, 100)}%`,
       delay: `${rand(0, 6)}s`,
@@ -108,25 +114,9 @@ export const BurningPaperCard: React.FC<CardProps> = ({
     }));
   }, []);
 
-  // Flame licks along edges
-  const flameElements = useMemo(() => {
-    return Array.from({ length: 12 }).map((_, i) => {
-      const edgePt = points[randInt(0, points.length - 1)];
-      return {
-        left: `calc(${edgePt.x + rand(-2, 2)}%)`,
-        top: `calc(${edgePt.y + rand(-2, 2)}%)`,
-        delay: `${rand(0, 2)}s`,
-        duration: `${rand(0.6, 1.2)}s`,
-        width: `${rand(2, 4)}px`,
-        height: `${rand(4, 8)}px`,
-        color: randColor(EMBER_COLORS.slice(0, 3)) // Only warm colors for flames
-      };
-    });
-  }, [points]);
-
   // Smoke wisps
   const smokeWisps = useMemo(() => {
-    return Array.from({ length: 8 }).map(() => ({
+    return Array.from({ length: 4 }).map(() => ({
       left: `${rand(20, 80)}%`,
       top: `${rand(5, 15)}%`,
       delay: `${rand(0, 4)}s`,
@@ -192,45 +182,21 @@ export const BurningPaperCard: React.FC<CardProps> = ({
         />
       ))}
 
-      {/* Flame licks along edges */}
-      {glowOnHover && flameElements.map((flame, i) => (
-        <div
-          key={`flame-${i}`}
-          className="absolute pointer-events-none z-12 flame-flicker"
-          style={{
-            width: flame.width,
-            height: flame.height,
-            left: flame.left,
-            top: flame.top,
-            background: `linear-gradient(to top, rgb(${flame.color}), rgba(${flame.color}, 0.6), transparent)`,
-            borderRadius: '50% 50% 50% 50% / 60% 60% 40% 40%',
-            animationDelay: flame.delay,
-            animationDuration: flame.duration,
-            filter: 'blur(0.5px)',
-            mixBlendMode: 'screen'
-          } as React.CSSProperties}
-        />
-      ))}
-
-      {/* Enhanced ember particles */}
-      {glowOnHover && emberParticles.map((ember, i) => (
-        <span
-          key={`ember-${i}`}
-          className="absolute rounded-full pointer-events-none z-10 animate-ember"
-          style={{
-            width: ember.size,
-            height: ember.size,
-            backgroundColor: `rgb(${ember.color})`,
-            left: ember.left,
-            top: ember.top,
-            filter: `blur(${ember.blur}px) brightness(${ember.intensity + 0.5})`,
-            animationDelay: ember.delay,
-            animationDuration: ember.duration,
-            boxShadow: `0 0 ${ember.blur + 2}px rgb(${ember.color})`,
-            mixBlendMode: 'screen'
-          } as React.CSSProperties}
-        />
-      ))}
+      {/* Internal ember system */}
+      <InternalEmbers
+        componentId={componentId}
+        config={emberConfig}
+        enabled={glowOnHover}
+        className="z-10"
+      />
+      
+      {/* Internal flame lick system */}
+      <InternalFlameLicks
+        componentId={componentId}
+        config={flameLickConfig}
+        enabled={glowOnHover}
+        className="z-12"
+      />
 
       {/* Floating ash particles */}
       {glowOnHover && ashParticles.map((ash, i) => (

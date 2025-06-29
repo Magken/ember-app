@@ -21,6 +21,71 @@
   -ms-overflow-style: none;
 }
 
+/* Optimized sparkle animation */
+@keyframes sparkle {
+  0% {
+    opacity: 0;
+    transform: scale(0.3) rotate(0deg);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1) rotate(180deg);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.3) rotate(360deg);
+  }
+}
+
+.animate-sparkle {
+  animation: sparkle ease-in-out infinite;
+  border-radius: 50%;
+  box-shadow: 0 0 2px currentColor;
+}
+
+/* Optimized ember animation */
+@keyframes ember {
+  0% {
+    opacity: 0;
+    transform: translate(0, 0) scale(0.5);
+  }
+  20% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(var(--drift-x), var(--drift-y)) scale(1.2);
+  }
+}
+
+.animate-ember {
+  animation: ember ease-out infinite;
+}
+
+/* Optimized flame lick animation */
+@keyframes flameLick {
+  0%, 100% {
+    transform: translateY(0) scaleY(1) scaleX(1) rotate(0deg);
+    opacity: 0.7;
+  }
+  25% {
+    transform: translateY(-1px) scaleY(1.2) scaleX(0.8) rotate(2deg);
+    opacity: 1;
+  }
+  50% {
+    transform: translateY(-2px) scaleY(0.9) scaleX(1.1) rotate(-1deg);
+    opacity: 0.8;
+  }
+  75% {
+    transform: translateY(-1px) scaleY(1.1) scaleX(0.9) rotate(1deg);
+    opacity: 0.9;
+  }
+}
+
+.animate-flameLick {
+  animation: flameLick ease-in-out infinite;
+}
+
 @keyframes emberFromEdge {
   0% {
     opacity: 1;
@@ -187,45 +252,12 @@
   }
 }
 
-@keyframes flameLick {
-  0%, 100% {
-    transform: translateY(0) scaleY(1) scaleX(1) rotate(0deg);
-    opacity: 0.7;
-  }
-  25% {
-    transform: translateY(-1px) scaleY(1.2) scaleX(0.8) rotate(2deg);
-    opacity: 1;
-  }
-  50% {
-    transform: translateY(-2px) scaleY(0.9) scaleX(1.1) rotate(-1deg);
-    opacity: 0.8;
-  }
-  75% {
-    transform: translateY(-1px) scaleY(1.1) scaleX(0.9) rotate(1deg);
-    opacity: 0.9;
-  }
-}
-
 .glow-burst {
   animation: glowBurst 0.6s ease-out;
 }
 
-@keyframes ember {
-  0% {
-    opacity: 0;
-    transform: translateY(0) scale(0.6);
-  }
-  20% {
-    opacity: 1;
-  }
-  100% {
-    opacity: 0;
-    transform: translateY(-20px) scale(1.2);
-  }
-}
-
-.animate-ember {
-  animation-name: ember;
+.animate-emberFromEdge {
+  animation-name: emberFromEdge;
   animation-timing-function: ease-out;
   animation-iteration-count: infinite;
 }
