@@ -1,10 +1,11 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { BurningPaperCard } from './Card';
 import { IconedButton } from './IconedButton';
 import { Flame } from './Flame';
 import { TextBlock, SmallText, TinyText } from './Typography';
 import { ChatInput } from './ChatInput';
 import { X, Check, CheckCheck, Play, Pause, Download } from 'lucide-react';
+import { InternalEmbers } from './InternalEmbers';
 
 interface MediaFile {
   id: string;
@@ -52,6 +53,16 @@ export const ChatBox: React.FC<ChatBoxProps> = ({
   const lastMessageRef = useRef<HTMLDivElement>(null);
   const previousScrollHeight = useRef<number>(0);
   const audioElementsRef = useRef<{ [key: string]: HTMLAudioElement }>({});
+
+  // Message bubble ember configuration (reduced by 60%)
+  const messageBubbleEmberConfig = useMemo(() => ({
+    count: 3, // Reduced from 8 to 3
+    size: { min: 0.5, max: 1 },
+    colors: ['255,191,0', '255,140,0', '255,69,0'],
+    driftRange: { x: { min: -5, max: 5 }, y: { min: -10, max: -3 } },
+    duration: { min: 2, max: 4 },
+    delayRange: { min: 0, max: 2 }
+  }), []);
 
   // Cleanup audio elements on unmount
   useEffect(() => {
@@ -329,22 +340,15 @@ export const ChatBox: React.FC<ChatBoxProps> = ({
                       }
                     `}
                   >
-                    {/* Ember particles for user messages */}
-                    {msg.sender === 'user' && Array.from({ length: 8 }).map((_, i) => (
-                      <span
-                        key={i}
-                        className="absolute w-[1px] h-[1px] bg-ember rounded-full pointer-events-none animate-ember z-65"
-                        style={{
-                          left: `${Math.random() * 100}%`,
-                          top: `${Math.random() * 100}%`,
-                          animationDelay: `${Math.random() * 2}s`,
-                          animationDuration: `${2 + Math.random() * 2}s`,
-                          filter: 'blur(0.5px) brightness(2)',
-                          boxShadow: '0 0 2px currentColor',
-                          mixBlendMode: 'screen'
-                        } as React.CSSProperties}
+                    {/* Internal ember particles for user messages (reduced count) */}
+                    {msg.sender === 'user' && (
+                      <InternalEmbers
+                        componentId={`message-${msg.id}`}
+                        config={messageBubbleEmberConfig}
+                        enabled={true}
+                        className="z-65"
                       />
-                    ))}
+                    )}
                     
                     {/* Text content */}
                     {msg.text && (

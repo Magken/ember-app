@@ -3,6 +3,7 @@ import { ChatBox } from './ui/ChatBox';
 import { BurningPaperCard } from './ui/Card';
 import { Heading1, Heading2, TextBlock, SmallText } from './ui/Typography';
 import { MessageCircle, Flame as FlameIcon, Send, Users, Code, Zap } from 'lucide-react';
+import { InternalEmbers } from './ui/InternalEmbers';
 
 interface Message {
   id: string;

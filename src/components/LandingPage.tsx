@@ -9,6 +9,8 @@ import { Heading1, Heading2, Heading3, TextBlock, SmallText } from './ui/Typogra
 import { Hearth } from './ui/Hearth';
 import { Sparkles, Eye, MessageCircle, Zap, Users, AlertCircle, CheckCircle, Mail, RefreshCw } from 'lucide-react';
 import { signUp, signIn, validateEmail, validatePasswordStrength, resendConfirmation } from '../lib/auth';
+import { InternalEmbers } from './ui/InternalEmbers';
+import { InternalFlameLicks } from './ui/InternalFlameLicks';
 
 const EMBER_COLORS = [
   '255,191,0',   // ember yellow
@@ -72,7 +74,7 @@ const generateLetterClipPath = (seed: number) => {
 };
 
 export const LandingPage: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'signup' | 'login'>('login'); // Changed to 'login' first
+  const [activeTab, setActiveTab] = useState<'signup' | 'login'>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [nickname, setNickname] = useState('');
@@ -241,36 +243,45 @@ export const LandingPage: React.FC = () => {
     r: generateLetterClipPath(4)
   }), []);
 
-  // Generate massive ember particle system
-  const massiveEmberParticles = React.useMemo(() => {
-    return Array.from({ length: 120 }).map((_, i) => ({
-      left: `${rand(-10, 110)}%`,
-      top: `${rand(-10, 110)}%`,
-      delay: `${rand(0, 6)}s`,
-      duration: `${rand(2, 5)}s`,
-      size: `${rand(0.5, 3)}px`,
-      color: randColor(EMBER_COLORS),
-      intensity: rand(0.6, 1.2),
-      drift: {
-        x: `${rand(-20, 20)}px`,
-        y: `${rand(-30, -10)}px`
-      }
-    }));
-  }, []);
+  // Reduced background ember particles (80% reduction)
+  const backgroundEmberConfig = useMemo(() => ({
+    count: 10, // Reduced from 50 to 10
+    size: { min: 0.5, max: 1.5 },
+    colors: EMBER_COLORS,
+    driftRange: { x: { min: -20, max: 20 }, y: { min: -30, max: -10 } },
+    duration: { min: 3, max: 6 },
+    delayRange: { min: 0, max: 6 }
+  }), []);
 
-  // Generate flickering flame elements
-  const flickeringFlames = React.useMemo(() => {
-    return Array.from({ length: 40 }).map((_, i) => ({
-      left: `${rand(5, 95)}%`,
-      top: `${rand(5, 95)}%`,
-      delay: `${rand(0, 3)}s`,
-      duration: `${rand(0.4, 0.8)}s`,
-      width: `${rand(2, 5)}px`,
-      height: `${rand(6, 12)}px`,
-      color: randColor(EMBER_COLORS.slice(0, 3)), // Only warm colors for flames
-      intensity: rand(0.8, 1.5)
-    }));
-  }, []);
+  // Reduced massive ember particles (90% reduction)
+  const massiveEmberConfig = useMemo(() => ({
+    count: 12, // Reduced from 120 to 12
+    size: { min: 0.5, max: 2 },
+    colors: EMBER_COLORS,
+    driftRange: { x: { min: -15, max: 15 }, y: { min: -25, max: -5 } },
+    duration: { min: 2, max: 4 },
+    delayRange: { min: 0, max: 3 }
+  }), []);
+
+  // Reduced flickering flames (80% reduction)
+  const flameLickConfig = useMemo(() => ({
+    count: 8, // Reduced from 40 to 8
+    size: { width: { min: 1.5, max: 3 }, height: { min: 4, max: 8 } },
+    colors: EMBER_COLORS.slice(0, 3),
+    duration: { min: 0.6, max: 1.2 },
+    delayRange: { min: 0, max: 2 },
+    positionRange: { x: { min: 5, max: 95 }, y: { min: 5, max: 95 } }
+  }), []);
+
+  // Tab button ember configurations
+  const tabEmberConfig = useMemo(() => ({
+    count: 8, // Reduced particle count
+    size: { min: 1, max: 2 },
+    colors: EMBER_COLORS,
+    driftRange: { x: { min: -10, max: 10 }, y: { min: -15, max: -5 } },
+    duration: { min: 1.5, max: 3 },
+    delayRange: { min: 0, max: 1 }
+  }), []);
 
   // Sample flames for the example hearth - increased spacing
   const exampleFlames = [
@@ -416,20 +427,14 @@ export const LandingPage: React.FC = () => {
 
       {/* Hero Section */}
       <section className="relative min-h-screen flex flex-col items-center justify-center px-8 py-16">
-        {/* Enhanced animated background embers */}
+        {/* Enhanced animated background embers with internal system */}
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          {[...Array(50)].map((_, i) => (
-            <div
-              key={i}
-              className="absolute w-1 h-1 bg-ember rounded-full animate-ember opacity-20"
-              style={{
-                left: `${Math.random() * 100}%`,
-                top: `${Math.random() * 100}%`,
-                animationDelay: `${Math.random() * 6}s`,
-                animationDuration: `${2 + Math.random() * 3}s`,
-              }}
-            />
-          ))}
+          <InternalEmbers
+            componentId="background-embers"
+            config={backgroundEmberConfig}
+            enabled={true}
+            className="z-5"
+          />
         </div>
 
         <div className="relative z-10 max-w-4xl mx-auto text-center space-y-8">
@@ -438,46 +443,20 @@ export const LandingPage: React.FC = () => {
             <div className="inline-flex items-center justify-center gap-3 relative overflow-visible">
               
               {/* Massive ember particle system around entire logo */}
-              {massiveEmberParticles.map((ember, i) => (
-                <span
-                  key={`massive-ember-${i}`}
-                  className="absolute rounded-full pointer-events-none z-20 animate-ember"
-                  style={{
-                    width: ember.size,
-                    height: ember.size,
-                    backgroundColor: `rgb(${ember.color})`,
-                    left: ember.left,
-                    top: ember.top,
-                    filter: `blur(0.5px) brightness(${ember.intensity})`,
-                    animationDelay: ember.delay,
-                    animationDuration: ember.duration,
-                    boxShadow: `0 0 4px rgb(${ember.color})`,
-                    mixBlendMode: 'screen',
-                    '--tx': ember.drift.x,
-                    '--ty': ember.drift.y
-                  } as React.CSSProperties}
-                />
-              ))}
+              <InternalEmbers
+                componentId="logo-massive-embers"
+                config={massiveEmberConfig}
+                enabled={true}
+                className="z-20"
+              />
 
               {/* Flickering flame elements */}
-              {flickeringFlames.map((flame, i) => (
-                <div
-                  key={`flame-${i}`}
-                  className="absolute pointer-events-none z-15 flame-flicker"
-                  style={{
-                    width: flame.width,
-                    height: flame.height,
-                    left: flame.left,
-                    top: flame.top,
-                    background: `linear-gradient(to top, rgb(${flame.color}), rgba(${flame.color}, 0.7), transparent)`,
-                    borderRadius: '50% 50% 50% 50% / 60% 60% 40% 40%',
-                    animationDelay: flame.delay,
-                    animationDuration: flame.duration,
-                    filter: `blur(0.5px) brightness(${flame.intensity})`,
-                    mixBlendMode: 'screen'
-                  } as React.CSSProperties}
-                />
-              ))}
+              <InternalFlameLicks
+                componentId="logo-flame-licks"
+                config={flameLickConfig}
+                enabled={true}
+                className="z-15"
+              />
 
               {/* Individual Letters with Burning Aesthetic - 20% Larger */}
               {['e', 'm', 'b', 'r'].map((letter, index) => (
@@ -595,25 +574,15 @@ export const LandingPage: React.FC = () => {
                     : 'text-ash hover:text-softwhite'
                 }`}
               >
-                {/* Ember particles for active tab */}
-                {activeTab === 'login' && Array.from({ length: 15 }).map((_, i) => (
-                  <span
-                    key={`login-ember-${i}`}
-                    className="absolute rounded-full pointer-events-none z-10 animate-ember"
-                    style={{
-                      width: `${rand(1, 2)}px`,
-                      height: `${rand(1, 2)}px`,
-                      backgroundColor: `rgb(${randColor(EMBER_COLORS)})`,
-                      left: `${rand(10, 90)}%`,
-                      top: `${rand(10, 90)}%`,
-                      filter: 'blur(0.5px) brightness(2)',
-                      animationDelay: `${rand(0, 2)}s`,
-                      animationDuration: `${rand(2, 4)}s`,
-                      boxShadow: '0 0 3px currentColor',
-                      mixBlendMode: 'screen'
-                    } as React.CSSProperties}
+                {/* Internal ember system for active tab */}
+                {activeTab === 'login' && (
+                  <InternalEmbers
+                    componentId="login-tab"
+                    config={tabEmberConfig}
+                    enabled={true}
+                    className="z-10"
                   />
-                ))}
+                )}
                 Welcome back
               </button>
               <button
@@ -627,25 +596,15 @@ export const LandingPage: React.FC = () => {
                     : 'text-ash hover:text-softwhite'
                 }`}
               >
-                {/* Ember particles for active tab */}
-                {activeTab === 'signup' && Array.from({ length: 15 }).map((_, i) => (
-                  <span
-                    key={`signup-ember-${i}`}
-                    className="absolute rounded-full pointer-events-none z-10 animate-ember"
-                    style={{
-                      width: `${rand(1, 2)}px`,
-                      height: `${rand(1, 2)}px`,
-                      backgroundColor: `rgb(${randColor(EMBER_COLORS)})`,
-                      left: `${rand(10, 90)}%`,
-                      top: `${rand(10, 90)}%`,
-                      filter: 'blur(0.5px) brightness(2)',
-                      animationDelay: `${rand(0, 2)}s`,
-                      animationDuration: `${rand(2, 4)}s`,
-                      boxShadow: '0 0 3px currentColor',
-                      mixBlendMode: 'screen'
-                    } as React.CSSProperties}
+                {/* Internal ember system for active tab */}
+                {activeTab === 'signup' && (
+                  <InternalEmbers
+                    componentId="signup-tab"
+                    config={tabEmberConfig}
+                    enabled={true}
+                    className="z-10"
                   />
-                ))}
+                )}
                 Join Embr
               </button>
             </div>
