@@ -339,8 +339,8 @@ export const Hearth: React.FC<HearthProps> = ({
       </div>
 
       {/* Arrow Pan Controls with Fit All in Center - Bottom Left */}
-      <div className="absolute bottom-8 left-4 z-50 pointer-events-auto">
-        <div className="grid grid-cols-3 gap-1 w-24 h-24">
+      <div className="absolute bottom-6 left-4 z-50 pointer-events-auto">
+        <div className="grid grid-cols-3 gap-2 w-32 h-32">
           {/* Top row - Up arrow */}
           <div></div>
           <IconedButton
