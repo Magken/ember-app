@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { Plus, Minus, Maximize2, RefreshCw, MessageCircle } from 'lucide-react';
+import { Plus, Minus, Maximize2, RefreshCw, ArrowUp, ArrowDown, ArrowLeft, ArrowRight } from 'lucide-react';
 import { IconedButton } from './IconedButton';
 import { Flame } from './Flame';
 
@@ -125,9 +125,6 @@ export const Hearth: React.FC<HearthProps> = ({
   const [zoom, setZoom] = useState(0.7); // Set initial zoom to 70%
   const [panX, setPanX] = useState(0);
   const [panY, setPanY] = useState(0);
-  const [isDragging, setIsDragging] = useState(false);
-  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
-  const [panStart, setPanStart] = useState({ x: 0, y: 0 });
   const hearthRef = useRef<HTMLDivElement>(null);
   const [autoZoomed, setAutoZoomed] = useState(false);
   
@@ -135,6 +132,9 @@ export const Hearth: React.FC<HearthProps> = ({
   const [stablePositions, setStablePositions] = useState<Array<{id: string, x: number, y: number}>>([]);
   const [lastFlameCount, setLastFlameCount] = useState(0);
   const [initialized, setInitialized] = useState(false);
+
+  // Pan step size (in pixels)
+  const PAN_STEP = 50;
 
   // Generate stable positions only when flame count changes or on initialization
   useEffect(() => {
@@ -230,89 +230,22 @@ export const Hearth: React.FC<HearthProps> = ({
     }
   };
 
-  // Mouse drag handlers for panning
-  const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    const target = e.target as HTMLElement;
-    
-    // Allow events to reach buttons and flames
-    if (target.closest('button') || target.closest('.flame-container')) {
-      return;
-    }
+  // Arrow button pan handlers
+  const handlePanUp = () => {
+    setPanY(prev => prev + PAN_STEP / zoom);
+  };
 
-    // Only start dragging if clicking on the hearth background itself
-    if (target === hearthRef.current || target.closest('[data-hearth-background]')) {
-      setIsDragging(true);
-      setDragStart({ x: e.clientX, y: e.clientY });
-      setPanStart({ x: panX, y: panY });
-      e.preventDefault();
-    }
-  }, [panX, panY]);
+  const handlePanDown = () => {
+    setPanY(prev => prev - PAN_STEP / zoom);
+  };
 
-  const handleMouseMove = useCallback((e: MouseEvent) => {
-    if (!isDragging) return;
+  const handlePanLeft = () => {
+    setPanX(prev => prev + PAN_STEP / zoom);
+  };
 
-    const deltaX = e.clientX - dragStart.x;
-    const deltaY = e.clientY - dragStart.y;
-
-    // Apply pan with zoom compensation
-    setPanX(panStart.x + deltaX / zoom);
-    setPanY(panStart.y + deltaY / zoom);
-  }, [isDragging, dragStart, panStart, zoom]);
-
-  const handleMouseUp = useCallback(() => {
-    setIsDragging(false);
-  }, []);
-
-  // Touch handlers for mobile panning
-  const handleTouchStart = useCallback((e: React.TouchEvent) => {
-    if (e.touches.length === 1) {
-      const target = e.target as HTMLElement;
-      
-      // Allow events to reach buttons and flames
-      if (target.closest('button') || target.closest('.flame-container')) {
-        return;
-      }
-
-      const touch = e.touches[0];
-      setIsDragging(true);
-      setDragStart({ x: touch.clientX, y: touch.clientY });
-      setPanStart({ x: panX, y: panY });
-      e.preventDefault();
-    }
-  }, [panX, panY]);
-
-  const handleTouchMove = useCallback((e: TouchEvent) => {
-    if (!isDragging || e.touches.length !== 1) return;
-
-    const touch = e.touches[0];
-    const deltaX = touch.clientX - dragStart.x;
-    const deltaY = touch.clientY - dragStart.y;
-
-    setPanX(panStart.x + deltaX / zoom);
-    setPanY(panStart.y + deltaY / zoom);
-    e.preventDefault();
-  }, [isDragging, dragStart, panStart, zoom]);
-
-  const handleTouchEnd = useCallback(() => {
-    setIsDragging(false);
-  }, []);
-
-  // Add global mouse/touch event listeners
-  useEffect(() => {
-    if (isDragging) {
-      document.addEventListener('mousemove', handleMouseMove);
-      document.addEventListener('mouseup', handleMouseUp);
-      document.addEventListener('touchmove', handleTouchMove, { passive: false });
-      document.addEventListener('touchend', handleTouchEnd);
-
-      return () => {
-        document.removeEventListener('mousemove', handleMouseMove);
-        document.removeEventListener('mouseup', handleMouseUp);
-        document.removeEventListener('touchmove', handleTouchMove);
-        document.removeEventListener('touchend', handleTouchEnd);
-      };
-    }
-  }, [isDragging, handleMouseMove, handleMouseUp, handleTouchMove, handleTouchEnd]);
+  const handlePanRight = () => {
+    setPanX(prev => prev - PAN_STEP / zoom);
+  };
 
   // Combine flames with stable positions - maintain position consistency
   const positionedFlames = useMemo(() => {
@@ -360,12 +293,10 @@ export const Hearth: React.FC<HearthProps> = ({
       style={{ 
         width, 
         height,
-        cursor: isDragging ? 'grabbing' : 'grab'
+        cursor: 'default' // Changed from grab cursor since no dragging
       }}
-      onMouseDown={handleMouseDown}
-      onTouchStart={handleTouchStart}
     >
-      {/* Control Buttons - Always enabled and clickable */}
+      {/* Control Buttons - Top Right */}
       <div className="absolute top-4 right-4 z-50 flex gap-2 pointer-events-auto">
         <IconedButton
           icon={<Plus className="w-4 h-4" />}
@@ -381,7 +312,7 @@ export const Hearth: React.FC<HearthProps> = ({
         />
       </div>
 
-      {/* Fit All Button - Always enabled and clickable */}
+      {/* Fit All Button - Top Left */}
       <div className="absolute top-4 left-4 z-50 pointer-events-auto">
         <IconedButton
           icon={<Maximize2 className="w-4 h-4" />}
@@ -391,7 +322,7 @@ export const Hearth: React.FC<HearthProps> = ({
         />
       </div>
 
-      {/* Refresh Button - Below Fit All - Always enabled and clickable */}
+      {/* Refresh Button - Below Fit All */}
       <div className="absolute top-16 left-4 z-50 pointer-events-auto">
         <IconedButton
           icon={<RefreshCw className="w-4 h-4" />}
@@ -401,8 +332,48 @@ export const Hearth: React.FC<HearthProps> = ({
         />
       </div>
 
-      {/* Bolt Logo - Below Refresh Button */}
-      <div className="absolute top-28 left-4 z-50 pointer-events-auto">
+      {/* Arrow Pan Controls - Bottom Left */}
+      <div className="absolute bottom-4 left-4 z-50 pointer-events-auto">
+        <div className="grid grid-cols-3 gap-1 w-24 h-24">
+          {/* Top row - Up arrow */}
+          <div></div>
+          <IconedButton
+            icon={<ArrowUp className="w-4 h-4" />}
+            label="Pan Up"
+            size="sm"
+            onClick={handlePanUp}
+          />
+          <div></div>
+          
+          {/* Middle row - Left and Right arrows */}
+          <IconedButton
+            icon={<ArrowLeft className="w-4 h-4" />}
+            label="Pan Left"
+            size="sm"
+            onClick={handlePanLeft}
+          />
+          <div></div>
+          <IconedButton
+            icon={<ArrowRight className="w-4 h-4" />}
+            label="Pan Right"
+            size="sm"
+            onClick={handlePanRight}
+          />
+          
+          {/* Bottom row - Down arrow */}
+          <div></div>
+          <IconedButton
+            icon={<ArrowDown className="w-4 h-4" />}
+            label="Pan Down"
+            size="sm"
+            onClick={handlePanDown}
+          />
+          <div></div>
+        </div>
+      </div>
+
+      {/* Bolt Logo - Below Arrow Controls */}
+      <div className="absolute bottom-32 left-4 z-50 pointer-events-auto">
         <a 
           href="https://bolt.new" 
           target="_blank" 
@@ -423,26 +394,23 @@ export const Hearth: React.FC<HearthProps> = ({
       </div>
 
       {/* Pan Instructions */}
-      <div className="absolute bottom-4 left-4 z-20 px-2 py-1 bg-navy/80 text-ash text-xs rounded border border-ember/30 pointer-events-none">
-        Drag to pan • 100px spacing
+      <div className="absolute bottom-16 right-4 z-20 px-2 py-1 bg-navy/80 text-ash text-xs rounded border border-ember/30 pointer-events-none">
+        Use arrows to pan • 100px spacing
       </div>
 
       {/* Hearth Canvas with Pure Black Background */}
       <div
         ref={hearthRef}
-        data-hearth-background="true"
         className="absolute inset-0 transition-transform duration-200 ease-out bg-black"
         style={{
           transform: `scale(${zoom}) translate(${panX}px, ${panY}px)`,
-          transformOrigin: 'center center',
-          transitionProperty: isDragging ? 'none' : 'transform'
+          transformOrigin: 'center center'
         }}
       >
         {/* Background texture/pattern for the hearth - subtle on black */}
-        <div className="absolute inset-0 opacity-5 pointer-events-none" data-hearth-background="true">
+        <div className="absolute inset-0 opacity-5 pointer-events-none">
           <div 
             className="w-full h-full"
-            data-hearth-background="true"
             style={{
               backgroundImage: `
                 radial-gradient(circle at 25% 25%, rgba(139,69,19,0.3) 0%, transparent 50%),
