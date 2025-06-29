@@ -425,9 +425,9 @@ export const LandingPage: React.FC = () => {
         </div>
 
         <div className="relative z-10 max-w-4xl mx-auto text-center space-y-8">
-          {/* Individual Letter Burning Aesthetic Logo - 20% Larger */}
+          {/* Individual Letter Burning Aesthetic Logo - Responsive sizing */}
           <div className="mb-12 relative overflow-visible">
-            <div className="inline-flex items-center justify-center gap-3 relative overflow-visible">
+            <div className="inline-flex items-center justify-center gap-2 sm:gap-3 relative overflow-visible">
               
               {/* Stationary ember particle system around entire logo */}
               {stationaryEmberParticles.map((ember, i) => (
@@ -467,7 +467,7 @@ export const LandingPage: React.FC = () => {
                 />
               ))}
 
-              {/* Individual Letters with Burning Aesthetic - 20% Larger */}
+              {/* Individual Letters with Burning Aesthetic - Responsive sizing */}
               {['e', 'm', 'b', 'r'].map((letter, index) => (
                 <div 
                   key={letter} 
@@ -517,9 +517,9 @@ export const LandingPage: React.FC = () => {
                     }}
                   />
 
-                  {/* Main letter with original gradient coloration - 20% Larger */}
+                  {/* Main letter with original gradient coloration - Responsive sizing */}
                   <span 
-                    className="relative z-10 text-7xl md:text-9xl font-bold font-[var(--font-display)] inline-block px-3 transition-all duration-500"
+                    className="relative z-10 text-4xl sm:text-5xl md:text-6xl lg:text-7xl xl:text-8xl font-bold font-[var(--font-display)] inline-block px-1 sm:px-2 md:px-3 transition-all duration-500"
                     style={{
                       clipPath: letterClipPaths[letter as keyof typeof letterClipPaths],
                       WebkitClipPath: letterClipPaths[letter as keyof typeof letterClipPaths],
@@ -541,18 +541,18 @@ export const LandingPage: React.FC = () => {
 
           {/* Main Headlines */}
           <div className="space-y-6">
-            <Heading1 className="text-2xl md:text-3xl bg-gradient-to-r from-ember via-carmine to-deepblue bg-clip-text text-transparent leading-tight">
+            <Heading1 className="text-xl sm:text-2xl md:text-3xl bg-gradient-to-r from-ember via-carmine to-deepblue bg-clip-text text-transparent leading-tight">
               Keep the ember alive.
             </Heading1>
             
-            <Heading2 className="text-2xl md:text-3xl text-softwhite/90 font-medium max-w-3xl mx-auto">
+            <Heading2 className="text-xl sm:text-2xl md:text-3xl text-softwhite/90 font-medium max-w-3xl mx-auto">
               Where connection glows, and conversation fuels the flame.
             </Heading2>
           </div>
 
           {/* Intro Paragraph */}
           <div className="max-w-2xl mx-auto">
-            <TextBlock className="text-lg md:text-xl text-ash leading-relaxed">
+            <TextBlock className="text-base sm:text-lg md:text-xl text-ash leading-relaxed">
               Embr is your minimalist canvas for connection. Here, each ember represents someone you care about—bright when you're in touch, dim when you haven't checked in. No endless threads. No noise. Just moments that matter, burning bright.
             </TextBlock>
           </div>
