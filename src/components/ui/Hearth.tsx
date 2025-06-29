@@ -312,18 +312,8 @@ export const Hearth: React.FC<HearthProps> = ({
         />
       </div>
 
-      {/* Fit All Button - Top Left */}
+      {/* Refresh Button - Top Left */}
       <div className="absolute top-4 left-4 z-50 pointer-events-auto">
-        <IconedButton
-          icon={<Maximize2 className="w-4 h-4" />}
-          label="Fit All"
-          size="sm"
-          onClick={resetView}
-        />
-      </div>
-
-      {/* Refresh Button - Below Fit All */}
-      <div className="absolute top-16 left-4 z-50 pointer-events-auto">
         <IconedButton
           icon={<RefreshCw className="w-4 h-4" />}
           label="Refresh"
@@ -333,7 +323,7 @@ export const Hearth: React.FC<HearthProps> = ({
       </div>
 
       {/* Bolt Logo - Directly Below Refresh Button */}
-      <div className="absolute top-28 left-4 z-50 pointer-events-auto">
+      <div className="absolute top-16 left-4 z-50 pointer-events-auto">
         <a 
           href="https://bolt.new" 
           target="_blank" 
@@ -348,7 +338,7 @@ export const Hearth: React.FC<HearthProps> = ({
         </a>
       </div>
 
-      {/* Arrow Pan Controls - Bottom Left with proper spacing */}
+      {/* Arrow Pan Controls with Fit All in Center - Bottom Left */}
       <div className="absolute bottom-8 left-4 z-50 pointer-events-auto">
         <div className="grid grid-cols-3 gap-1 w-24 h-24">
           {/* Top row - Up arrow */}
@@ -361,14 +351,19 @@ export const Hearth: React.FC<HearthProps> = ({
           />
           <div></div>
           
-          {/* Middle row - Left and Right arrows */}
+          {/* Middle row - Left arrow, Fit All (center), Right arrow */}
           <IconedButton
             icon={<ArrowLeft className="w-4 h-4" />}
             label="Pan Left"
             size="sm"
             onClick={handlePanLeft}
           />
-          <div></div>
+          <IconedButton
+            icon={<Maximize2 className="w-4 h-4" />}
+            label="Fit All"
+            size="sm"
+            onClick={resetView}
+          />
           <IconedButton
             icon={<ArrowRight className="w-4 h-4" />}
             label="Pan Right"
