@@ -1,6 +1,8 @@
-import React, { useState, useRef, useEffect, CSSProperties } from 'react';
+import React, { useState, useRef, useEffect, CSSProperties, useMemo } from 'react';
 import { Send, Image, Mic, FileImage, X, Play, Pause, Volume2, Video, Upload } from 'lucide-react';
 import { IconedButton } from './IconedButton';
+import { InternalSparkles } from './InternalSparkles';
+import { SparkleConfig, COLOR_PALETTES } from '../../lib/sparkleConfig';
 import { uploadMediaFile } from '../../lib/messaging';
 
 interface MediaFile {
@@ -19,10 +21,6 @@ interface ChatInputProps {
   className?: string;
   disabled?: boolean;
 }
-
-const emberColors = ['bg-ember', 'bg-carmine', 'bg-deepblue', 'bg-softwhite'];
-const randInt = (min: number, max: number) =>
-  Math.floor(Math.random() * (max - min + 1)) + min;
 
 export const ChatInput: React.FC<ChatInputProps> = ({
   value,
@@ -47,6 +45,23 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const audioElementsRef = useRef<{ [key: string]: HTMLAudioElement }>({});
+
+  // Generate unique input ID for consistent sparkles
+  const inputId = useMemo(() => 
+    `chat-input-${placeholder.slice(0, 10)}`, 
+    [placeholder]
+  );
+
+  // Optimized sparkle configuration
+  const sparkleConfig: SparkleConfig = useMemo(() => ({
+    elementId: inputId,
+    sparkleCount: burst ? 20 : focused ? 8 : 0, // Reduced from 40+
+    animationDuration: burst ? 0.6 : 2,
+    sizeRange: { min: 1.5, max: 2.5 },
+    colorPalette: COLOR_PALETTES.ember,
+    enabled: true,
+    pattern: 'edge'
+  }), [inputId, burst, focused]);
 
   // Auto-resize textarea
   useEffect(() => {
@@ -387,55 +402,15 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
   };
 
-  // Only show ember particles on burst (send), not during typing
-  const emberCount = burst ? 40 : 0;
-
   return (
     <div className={`relative w-full space-y-3 ${className}`}>
-      {/* Controlled ember particle system - only on send burst */}
-      {Array.from({ length: emberCount }).map((_, i) => {
-        const edge = randInt(0, 3);
-        const offset = (Math.random() - 0.5) * 80;
-        let x = 0, y = 0;
-        switch (edge) {
-          case 0: x = Math.random() * 100; y = offset; break;
-          case 1: x = 100 + offset; y = Math.random() * 100; break;
-          case 2: x = Math.random() * 100; y = 100 + offset; break;
-          default: x = offset; y = Math.random() * 100; break;
-        }
-        const angle = Math.random() * Math.PI * 2;
-        const dist = 30;
-        const tx = Math.cos(angle) * dist;
-        const ty = Math.sin(angle) * dist - 8;
-        const color = emberColors[i % emberColors.length];
-        const delay = (Math.random() * 0.2).toFixed(2);
-        const duration = 0.6 + Math.random() * 0.3;
-
-        return (
-          <span
-            key={i}
-            className={`
-              absolute w-[1.5px] h-[1.5px] ${color} rounded-sm
-              pointer-events-none mix-blend-screen
-            `}
-            style={{
-              left: `${x}%`,
-              top: `${y}%`,
-              animationName: 'emberFromEdge',
-              animationDelay: `${delay}s`,
-              animationDuration: `${duration}s`,
-              animationIterationCount: '1',
-              animationTimingFunction: 'ease-out',
-              animationFillMode: 'forwards',
-              '--tx': `${tx}px`,
-              '--ty': `${ty}px`,
-              filter: 'brightness(2.5) blur(0.5px)',
-              boxShadow: '0 0 3px currentColor',
-              zIndex: 5
-            } as CSSProperties}
-          />
-        );
-      })}
+      {/* Optimized sparkle system */}
+      <InternalSparkles 
+        config={sparkleConfig}
+        isActive={!disabled}
+        intensity={burst ? 2 : 1}
+        className="z-5"
+      />
 
       {/* Uploading Indicator */}
       {uploadingFiles.size > 0 && (

@@ -1,4 +1,6 @@
 import React, { useState, CSSProperties, useMemo } from 'react';
+import { InternalSparkles } from './InternalSparkles';
+import { SparkleConfig, COLOR_PALETTES } from '../../lib/sparkleConfig';
 
 interface IconedButtonProps {
   icon: React.ReactNode;
@@ -7,11 +9,8 @@ interface IconedButtonProps {
   className?: string;
   variant?: 'primary' | 'ghost';
   size?: 'sm' | 'md' | 'lg';
+  disabled?: boolean;
 }
-
-const emberColors = ['bg-ember', 'bg-carmine', 'bg-deepblue', 'bg-softwhite'];
-const randInt = (min: number, max: number) =>
-  Math.floor(Math.random() * (max - min + 1)) + min;
 
 export const IconedButton: React.FC<IconedButtonProps> = ({
   icon,
@@ -20,18 +19,35 @@ export const IconedButton: React.FC<IconedButtonProps> = ({
   className = '',
   variant = 'primary',
   size = 'md',
+  disabled = false,
 }) => {
   const [hovered, setHovered] = useState(false);
   const [burst, setBurst] = useState(false);
 
   const handleClick = () => {
+    if (disabled) return;
     setBurst(true);
     onClick?.();
     setTimeout(() => setBurst(false), 500);
   };
 
-  // Reduced ember counts by 50%
-  const emberCount = burst ? 30 : hovered ? 15 : 8;
+  // Generate unique button ID for consistent sparkles
+  const buttonId = useMemo(() => 
+    `icon-btn-${label.slice(0, 10)}-${variant}-${size}`, 
+    [label, variant, size]
+  );
+
+  // Optimized sparkle configuration
+  const sparkleConfig: SparkleConfig = useMemo(() => ({
+    elementId: buttonId,
+    sparkleCount: burst ? 15 : hovered ? 8 : 0, // Reduced from 30+
+    animationDuration: burst ? 0.8 : 2,
+    sizeRange: { min: 1.5, max: 2.5 },
+    colorPalette: variant === 'primary' ? COLOR_PALETTES.ember : COLOR_PALETTES.carmine,
+    enabled: true,
+    pattern: 'radial',
+    radius: 30
+  }), [buttonId, burst, hovered, variant]);
 
   const sizeMap: Record<string, string> = {
     sm: 'w-10 h-10 p-2',
@@ -85,56 +101,24 @@ export const IconedButton: React.FC<IconedButtonProps> = ({
       aria-label={label}
       title={label}
       onClick={handleClick}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
+      onMouseEnter={() => !disabled && setHovered(true)}
+      onMouseLeave={() => !disabled && setHovered(false)}
+      disabled={disabled}
       className={`
         ${base}
         ${sizeMap[size]}
         ${variant === 'primary' ? primary : ghost}
+        ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
         ${className}
       `}
     >
-      {[...Array(emberCount)].map((_, i) => {
-        const edge = randInt(0, 3);
-        const offset = (Math.random() - 0.5) * 30;
-        let x = 0, y = 0;
-        switch (edge) {
-          case 0: x = Math.random() * 100; y = offset; break;
-          case 1: x = 100 + offset; y = Math.random() * 100; break;
-          case 2: x = Math.random() * 100; y = 100 + offset; break;
-          default: x = offset; y = Math.random() * 100; break;
-        }
-        const angle = Math.random() * Math.PI * 2;
-        const dist = burst ? 50 : hovered ? 30 : 20;
-        const tx = Math.cos(angle) * dist;
-        const ty = Math.sin(angle) * dist - 5; // Slight upward drift
-        const color = emberColors[i % emberColors.length];
-        const delay = (Math.random() * 0.5).toFixed(2);
-        const duration = (burst ? 0.8 : hovered ? 2 : 3) + Math.random() * (burst ? 0.5 : 1.5);
-
-        return (
-          <span
-            key={i}
-            className={`
-              absolute w-[2px] h-[2px] ${color} rounded-full
-              pointer-events-none mix-blend-screen animate-emberFromEdge
-            `}
-            style={{
-              left: `${x}%`,
-              top: `${y}%`,
-              animationDelay: `${delay}s`,
-              animationDuration: `${duration}s`,
-              animationIterationCount: 'infinite',
-              animationTimingFunction: 'ease-out',
-              animationFillMode: 'forwards',
-              '--tx': `${tx}px`,
-              '--ty': `${ty}px`,
-              filter: `brightness(${burst ? 3 : hovered ? 2.5 : 2}) blur(0.5px)`,
-              boxShadow: `0 0 ${burst ? 3 : 2}px currentColor`
-            } as CSSProperties}
-          />
-        );
-      })}
+      {/* Optimized sparkle system */}
+      <InternalSparkles 
+        config={sparkleConfig}
+        isActive={!disabled}
+        intensity={burst ? 2 : 1}
+        className="z-5"
+      />
 
       <span className={`relative z-10 transition-all duration-200 ${
         variant === 'ghost' && hovered ? 'drop-shadow-sm' : ''
