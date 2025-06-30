@@ -1,175 +1,156 @@
-# Embr - Comprehensive Authentication System
+# Embr - Social Connection Platform
 
-A secure, production-ready authentication system built with Supabase and React.
+## 🌟 Project Overview
 
-## Features
+**Embr** is a minimalist social connection platform that reimagines digital communication through the metaphor of a hearth. Each user is represented as a flame on a shared hearth, with the flame's brightness indicating the strength of your connection and recent activity.
 
-### 🔐 Authentication
-- **Email & Password Sign Up/In** with comprehensive validation
-- **Email Verification** required before account activation
-- **Password Reset** functionality with secure token handling
-- **Rate Limiting** to prevent brute force attacks
-- **Session Management** with automatic refresh
+### Core Concept
+- **Flames as Friends**: Each flame represents a person you care about
+- **Visual Connection Strength**: Bright flames = active connections, dim flames = needs attention
+- **Minimalist Design**: No endless threads, no noise - just meaningful moments
+- **Hearth Metaphor**: A warm, inviting space where connections naturally grow
 
-### 🛡️ Security Features
-- **Strong Password Requirements**:
-  - Minimum 8 characters
-  - At least 1 uppercase letter
-  - At least 1 lowercase letter
-  - At least 1 number
-  - At least 1 special character
-  - Protection against common passwords
-- **Email Validation** with proper format checking
-- **Terms & Conditions** acceptance tracking with timestamps
-- **Authentication Attempt Logging** for security monitoring
-- **JWT Token Management** with automatic refresh
-- **Row Level Security (RLS)** on all database tables
+## 🛠️ Tech Stack
 
-### 📊 Database Schema
-- `user_profiles` - Extended user information
-- `user_agreements` - Terms acceptance tracking
-- `auth_attempts` - Failed login monitoring
-- `password_reset_tokens` - Secure password reset
-- `user_sessions` - Enhanced session management
+### Frontend
+- **React 18.3.1** - Modern React with hooks and functional components
+- **TypeScript 5.5.3** - Type-safe development with strict type checking
+- **Vite 5.4.2** - Fast build tool and development server
+- **Tailwind CSS 3.4.1** - Utility-first CSS framework for rapid UI development
+- **Lucide React 0.344.0** - Beautiful, customizable icons
 
-## Setup Instructions
+### Backend & Database
+- **Supabase 2.39.0** - Open-source Firebase alternative
+  - PostgreSQL database with real-time subscriptions
+  - Built-in authentication and authorization
+  - Row Level Security (RLS) for data protection
+  - Real-time messaging capabilities
 
-### 1. Supabase Setup
+### Development Tools
+- **ESLint 9.9.1** - Code linting and quality enforcement
+- **PostCSS 8.4.35** - CSS processing and optimization
+- **Autoprefixer 10.4.18** - Automatic vendor prefixing
 
-1. Create a new Supabase project at [supabase.com](https://supabase.com)
-2. Go to the SQL Editor in your Supabase dashboard
-3. Run the migration file: `supabase/migrations/create_auth_system.sql`
-4. Configure authentication settings:
-   - Go to Authentication > Settings
-   - Disable "Enable email confirmations" if you want immediate access (not recommended for production)
-   - Set up email templates for verification and password reset
+## ✨ Key Features
 
-### 2. Environment Variables
+### 🔥 The Hearth Experience
+- **Interactive Hearth Interface** - Navigate a beautiful, animated hearth where each flame represents a friend
+- **Flame Visualization** - Dynamic flames that respond to connection strength and activity
+- **Zoom & Pan Controls** - Explore your social connections with intuitive navigation
+- **Visual Connection Strength** - Flames brighten with active connections, dim with neglected ones
+- **Dying Flame Alerts** - Visual indicators when connections need attention
 
-1. Copy `.env.example` to `.env`
-2. Fill in your Supabase project details:
-   ```
-   VITE_SUPABASE_URL=https://your-project.supabase.co
-   VITE_SUPABASE_ANON_KEY=your_anon_key
-   ```
+### 💬 Real-time Messaging
+- **Instant Messaging** between connected users with real-time updates
+- **Conversation Caching** - Fast loading of message history
+- **Unread Indicators** - Green dots on flames with new messages
+- **Typing Indicators** - See when friends are composing messages
+- **Message Persistence** - Conversations saved and accessible across sessions
 
-### 3. Email Configuration (Production)
+### 👥 Social Connection Management
+- **Friend System** - Add, remove, and manage your connections
+- **Profile Customization** - Personalize your profile with avatars and bios
+- **Connection Strength Tracking** - Automatic calculation based on interaction frequency
+- **Activity Monitoring** - Track when friends are active and engaged
+- **Friend Discovery** - Find and connect with new people
 
-For production, configure SMTP settings in Supabase:
-1. Go to Authentication > Settings
-2. Configure SMTP settings with your email provider
-3. Customize email templates for your brand
+### 🔐 Security & Authentication
+- **Secure Authentication** - Email/password with comprehensive validation
+- **Email Verification** - Account security with email confirmation
+- **Password Reset** - Secure token-based password recovery
+- **Rate Limiting** - Protection against brute force attacks
+- **Session Management** - Automatic token refresh and secure sessions
 
-## Usage
+### 🎨 User Experience
+- **Responsive Design** - Seamless experience across desktop and mobile
+- **Dark Theme** - Consistent, eye-friendly dark aesthetic
+- **Smooth Animations** - Fluid transitions and interactive elements
+- **Accessibility** - Keyboard navigation and screen reader support
+- **Device Compatibility** - Smart warnings for unsupported platforms
 
-### Basic Authentication
+## 🚀 Getting Started
 
-```tsx
-import { AuthProvider, useAuth } from './components/auth/AuthProvider';
-import { AuthPage } from './components/auth/AuthPage';
+### Prerequisites
+- Node.js 18+ 
+- npm or yarn
+- Supabase account
 
-function App() {
-  return (
-    <AuthProvider>
-      <AuthPage />
-    </AuthProvider>
-  );
-}
+### Installation
+```bash
+# Clone the repository
+git clone [repository-url]
+cd ember-app
+
+# Install dependencies
+npm install
+
+# Set up environment variables
+cp .env.example .env
+# Edit .env with your Supabase credentials
+
+# Run database migrations
+# Execute migration files in supabase/migrations/
+
+# Start development server
+npm run dev
 ```
 
-### Using Authentication in Components
-
-```tsx
-import { useAuth } from './components/auth/AuthProvider';
-
-function MyComponent() {
-  const { user, profile, loading, signOut } = useAuth();
-
-  if (loading) return <div>Loading...</div>;
-  if (!user) return <div>Please sign in</div>;
-
-  return (
-    <div>
-      <h1>Welcome, {profile?.nickname}!</h1>
-      <button onClick={signOut}>Sign Out</button>
-    </div>
-  );
-}
+### Environment Variables
+```env
+VITE_SUPABASE_URL=https://your-project.supabase.co
+VITE_SUPABASE_ANON_KEY=your_anon_key_here
 ```
 
-### Manual Authentication Functions
+## 📱 Device Support
 
-```tsx
-import { signUp, signIn, signOut, requestPasswordReset } from './lib/auth';
+### Supported Platforms
+- **Desktop**: Windows, Linux, Android (Chrome, Firefox, Edge)
+- **Mobile**: Android devices with modern browsers
 
-// Sign up with validation
-const { data, error } = await signUp(email, password, nickname, agreeToTerms);
+### Limited Support
+- **Apple Devices**: iOS, macOS, Safari (shows compatibility warning)
+- **Legacy Browsers**: Internet Explorer, older versions
 
-// Sign in with rate limiting
-const { data, error } = await signIn(email, password);
+## 🎯 Project Vision
 
-// Request password reset
-const { error } = await requestPasswordReset(email);
-```
+### Mission
+Embr aims to simplify digital social connection by removing the noise and focusing on what matters most - meaningful relationships. Through the hearth metaphor, users can visually understand and nurture their connections in an intuitive, beautiful way.
 
-## Security Features
+### Core Values
+1. **Simplicity** - Clean, distraction-free interface
+2. **Connection** - Meaningful, visual representation of relationships
+3. **Authenticity** - Real-time, genuine interactions
+4. **Accessibility** - Inclusive design for diverse users
+5. **Privacy** - Secure, user-controlled data
 
-### Rate Limiting
-- **Login**: 5 attempts per 15 minutes
-- **Sign Up**: 5 attempts per 15 minutes  
-- **Password Reset**: 3 attempts per 60 minutes
+### Future Roadmap
+- **Group Conversations** - Multi-user flame circles for group chats
+- **Media Sharing** - Photo and file sharing capabilities
+- **Voice Messages** - Audio communication features
+- **Mobile Apps** - Native iOS and Android applications
+- **Advanced Analytics** - Connection strength insights and recommendations
+- **Custom Hearth Themes** - Personalized visual experiences
 
-### Password Requirements
-All passwords must meet these criteria:
-- Minimum 8 characters
-- At least 1 uppercase letter (A-Z)
-- At least 1 lowercase letter (a-z)
-- At least 1 number (0-9)
-- At least 1 special character (!@#$%^&*)
-- Not in common password list
+## 🤝 Contributing
 
-### Data Protection
-- All sensitive data encrypted at rest
-- Row Level Security (RLS) enabled on all tables
-- User data isolated by authentication
-- Secure session handling with automatic cleanup
+### Development Guidelines
+- Follow TypeScript best practices
+- Use functional components with hooks
+- Maintain consistent code style with ESLint
+- Write meaningful commit messages
+- Test changes across different devices
 
-## Database Functions
+### Code Structure
+- **Components**: Reusable, single-responsibility components
+- **Hooks**: Custom hooks for shared logic
+- **Types**: Comprehensive TypeScript interfaces
+- **Utils**: Pure functions for business logic
+- **Styles**: Tailwind classes with custom design tokens
 
-The system includes several PostgreSQL functions for enhanced security:
+## 📄 License
 
-- `validate_email()` - Email format validation
-- `validate_password_strength()` - Password strength checking
-- `check_rate_limit()` - Rate limiting enforcement
-- `log_auth_attempt()` - Authentication attempt logging
-- `cleanup_expired_data()` - Automatic cleanup of expired tokens
+This project is part of the Embr platform and follows the same licensing terms. All rights reserved.
 
-## Monitoring & Analytics
+---
 
-Track authentication attempts and user behavior:
-
-```tsx
-import { getUserAuthAttempts } from './lib/auth';
-
-// Get user's recent authentication attempts
-const attempts = await getUserAuthAttempts(10);
-```
-
-## Production Considerations
-
-1. **Email Configuration**: Set up proper SMTP for email delivery
-2. **Rate Limiting**: Monitor and adjust rate limits based on usage
-3. **Session Management**: Configure appropriate session timeouts
-4. **Monitoring**: Set up alerts for suspicious authentication patterns
-5. **Backup**: Regular database backups for user data protection
-
-## Support
-
-For issues or questions:
-1. Check the Supabase documentation
-2. Review the authentication logs in your dashboard
-3. Monitor rate limiting and adjust as needed
-
-## License
-
-This authentication system is part of the Embr project and follows the same licensing terms.
+**Embr** - Where connection glows, and conversation fuels the flame. 🔥
