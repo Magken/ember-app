@@ -4,6 +4,7 @@ import { LiveChatBox } from './ui/LiveChatBox';
 import { Hearth } from './ui/Hearth';
 import { UserPlus } from 'lucide-react';
 import { useAuth } from './auth/AuthProvider';
+import { sessionManager } from '../lib/sessionManager';
 import { 
   sendFriendRequest, 
   respondToFriendRequest, 
@@ -66,12 +67,55 @@ export const MainPage: React.FC = () => {
   const [friendRequestPollingActive, setFriendRequestPollingActive] = useState(true);
   const [periodicRefreshActive, setPeriodicRefreshActive] = useState(true);
 
+  // Session validation state
+  const [sessionValid, setSessionValid] = useState(true);
+
   // Set nickname from profile when available
   useEffect(() => {
     if (profile?.nickname) {
       setNickname(profile.nickname);
     }
   }, [profile]);
+
+  // Initialize session validation on component mount
+  useEffect(() => {
+    const validateSession = async () => {
+      try {
+        console.log('Validating session on MainPage mount...');
+        const isValid = await sessionManager.validateSession();
+        setSessionValid(isValid);
+        
+        if (!isValid) {
+          console.log('Session validation failed, user may need to sign in again');
+          // The AuthProvider will handle the redirect
+        }
+      } catch (error) {
+        console.error('Session validation error:', error);
+        setSessionValid(false);
+      }
+    };
+
+    validateSession();
+  }, []);
+
+  // Set up session activity tracking
+  useEffect(() => {
+    const updateActivity = () => {
+      sessionManager.updateSessionActivity();
+    };
+
+    // Update activity on user interactions
+    const events = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart'];
+    events.forEach(event => {
+      document.addEventListener(event, updateActivity, { passive: true });
+    });
+
+    return () => {
+      events.forEach(event => {
+        document.removeEventListener(event, updateActivity);
+      });
+    };
+  }, []);
 
   // Clear messages when switching tabs
   useEffect(() => {

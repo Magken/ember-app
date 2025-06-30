@@ -3,6 +3,7 @@ import { User, Session } from '@supabase/supabase-js';
 import { supabase, sessionId } from '../../lib/supabase';
 import type { UserProfile } from '../../lib/supabase';
 import { getCurrentUserProfile } from '../../lib/auth';
+import { sessionManager, type SessionData } from '../../lib/sessionManager';
 
 interface AuthContextType {
   user: User | null;
@@ -13,6 +14,7 @@ interface AuthContextType {
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
   clearAuthState: () => void;
+  clearCacheForSignIn: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -46,20 +48,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setProfile(null);
     setError(null);
     setLoading(false);
-    
-    // Clear only this tab's session storage
+  };
+
+  // Function to clear cache for smooth sign-in
+  const clearCacheForSignIn = async () => {
     try {
-      const keysToRemove = [];
-      for (let i = 0; i < sessionStorage.length; i++) {
-        const key = sessionStorage.key(i);
-        if (key && key.includes('supabase')) {
-          keysToRemove.push(key);
-        }
-      }
-      keysToRemove.forEach(key => sessionStorage.removeItem(key));
-      console.log('Cleared tab-specific session storage');
-    } catch (e) {
-      console.warn('Could not clear sessionStorage:', e);
+      await sessionManager.clearCacheForSignIn();
+    } catch (error) {
+      console.warn('Error clearing cache for sign-in:', error);
     }
   };
 
@@ -90,27 +86,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setProfile(null);
       setError(null);
       
-      // Clear only this tab's session storage
-      try {
-        const keysToRemove = [];
-        for (let i = 0; i < sessionStorage.length; i++) {
-          const key = sessionStorage.key(i);
-          if (key && key.includes('supabase')) {
-            keysToRemove.push(key);
-          }
-        }
-        keysToRemove.forEach(key => sessionStorage.removeItem(key));
-        console.log('Session storage cleared for this tab only');
-      } catch (e) {
-        console.warn('Could not clear sessionStorage:', e);
-      }
-      
-      // Then sign out from Supabase (only this session)
-      const { error } = await supabase.auth.signOut({ scope: 'local' });
-      if (error) {
-        console.error('Supabase sign out error:', error);
-        // Don't throw error, we've already cleared local state
-      }
+      // Use session manager to clear session and cache
+      await sessionManager.clearSession();
       
       console.log('Sign out completed successfully for this tab');
       
@@ -127,9 +104,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     let initializationTimeout: NodeJS.Timeout;
 
     // Set a maximum time for initialization
-    const MAX_INIT_TIME = 6000; // 6 seconds
+    const MAX_INIT_TIME = 8000; // 8 seconds
 
-    // Get initial session with timeout protection
+    // Get initial session with enhanced session management
     const getInitialSession = async () => {
       try {
         console.log(`Getting initial session for tab: ${sessionId}`);
@@ -142,7 +119,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           }
         }, MAX_INIT_TIME);
         
-        const { data: { session }, error } = await supabase.auth.getSession();
+        // Check if cache should be cleared (for returning users)
+        if (sessionManager.shouldClearCache()) {
+          console.log('Cache clear request detected, clearing cache...');
+          await sessionManager.clearCacheForSignIn();
+        }
+        
+        // Initialize session using session manager
+        const sessionData = await sessionManager.initializeSession();
         
         // Clear the timeout since we got a response
         if (initializationTimeout) {
@@ -151,65 +135,41 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         
         if (!mounted) return;
         
-        if (error) {
-          console.error('Error getting session:', error);
+        if (sessionData) {
+          console.log(`Session initialized successfully for ${sessionId}`);
           
-          // Handle specific error cases that indicate invalid sessions
-          if (error.message?.includes('User from sub claim in JWT does not exist') ||
-              error.message?.includes('Invalid JWT') ||
-              error.message?.includes('JWT expired') ||
-              error.message?.includes('refresh_token_not_found')) {
-            console.log('Invalid/expired session detected, clearing...');
+          // Get Supabase session for compatibility
+          const { data: { session }, error } = await supabase.auth.getSession();
+          
+          if (error) {
+            console.warn('Supabase session error after initialization:', error);
             clearAuthState();
-            // Force sign out to clean up any remaining session data
-            await supabase.auth.signOut({ scope: 'local' });
-            return;
-          } else {
-            console.warn('Session error, but continuing:', error.message);
-            setError('Authentication issue detected. Please try refreshing the page.');
-            setLoading(false);
             return;
           }
-        }
-        
-        console.log(`Initial session result for ${sessionId}:`, session ? 'Found valid session' : 'No session');
-        
-        if (session?.user) {
-          // Validate the session by trying to get user info
-          try {
-            const { data: userData, error: userError } = await supabase.auth.getUser();
-            
-            if (userError || !userData.user) {
-              console.log('Session validation failed, clearing...');
-              clearAuthState();
-              await supabase.auth.signOut({ scope: 'local' });
-              return;
-            }
-            
-            console.log(`Session validated for ${sessionId}, setting user state`);
+          
+          if (session?.user) {
             setSession(session);
-            setUser(userData.user);
+            setUser(session.user);
             
-            // Try to load profile, but don't block if it fails
-            try {
-              console.log('Loading user profile...');
-              const userProfile = await getCurrentUserProfile();
-              if (mounted) {
-                setProfile(userProfile);
-                console.log('Profile loaded successfully');
-              }
-            } catch (profileError) {
-              console.warn('Profile loading failed, but continuing:', profileError);
-              // Continue without profile - user can still use the app
-            }
-          } catch (validationError) {
-            console.error('Session validation error:', validationError);
-            clearAuthState();
-            await supabase.auth.signOut({ scope: 'local' });
-            return;
+            // Create profile object from session data
+            const profileData: UserProfile = {
+              id: sessionData.userId,
+              nickname: sessionData.nickname,
+              unique_code: sessionData.uniqueCode,
+              avatar_url: undefined,
+              bio: undefined,
+              is_active: true,
+              last_seen_at: new Date().toISOString(),
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString()
+            };
+            
+            setProfile(profileData);
+            console.log('Profile loaded from session data');
           }
         } else {
           // No session - user is not logged in
+          console.log(`No valid session found for ${sessionId}`);
           setSession(null);
           setUser(null);
           setProfile(null);
@@ -298,6 +258,18 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       }
     });
 
+    // Set up periodic session validation
+    const validationInterval = setInterval(() => {
+      if (mounted && document.visibilityState === 'visible') {
+        sessionManager.validateSession().then(isValid => {
+          if (!isValid && mounted) {
+            console.log('Session validation failed, clearing auth state');
+            clearAuthState();
+          }
+        });
+      }
+    }, 5 * 60 * 1000); // Check every 5 minutes
+
     // Cleanup function
     return () => {
       mounted = false;
@@ -305,6 +277,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         clearTimeout(initializationTimeout);
       }
       subscription.unsubscribe();
+      clearInterval(validationInterval);
     };
   }, []);
 
@@ -317,6 +290,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     signOut,
     refreshProfile,
     clearAuthState,
+    clearCacheForSignIn,
   };
 
   return (

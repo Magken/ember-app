@@ -5,6 +5,7 @@ import { InputBox } from '../ui/InputBox';
 import { PasswordInput } from '../ui/PasswordInput';
 import { Heading2, TextBlock, SmallText } from '../ui/Typography';
 import { signIn, resetPassword, validateEmail } from '../../lib/auth';
+import { useAuth } from './AuthProvider';
 import { AlertCircle, CheckCircle } from 'lucide-react';
 
 interface SignInFormProps {
@@ -22,6 +23,8 @@ export const SignInForm: React.FC<SignInFormProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [resetEmailSent, setResetEmailSent] = useState(false);
   const [showForgotPassword, setShowForgotPassword] = useState(false);
+  
+  const { clearCacheForSignIn } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -29,6 +32,10 @@ export const SignInForm: React.FC<SignInFormProps> = ({
     setLoading(true);
 
     try {
+      // Clear cache before sign-in for smooth authentication
+      console.log('Clearing cache before sign-in...');
+      await clearCacheForSignIn();
+      
       const { data, error } = await signIn(email, password);
 
       if (error) {
