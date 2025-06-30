@@ -293,7 +293,7 @@ export const Hearth: React.FC<HearthProps> = ({
       style={{ 
         width, 
         height,
-        cursor: 'default' // Changed from grab cursor since no dragging
+        cursor: 'default'
       }}
     >
       {/* Control Buttons - Top Right */}
@@ -386,11 +386,6 @@ export const Hearth: React.FC<HearthProps> = ({
       {/* Zoom Level Indicator */}
       <div className="absolute bottom-4 right-4 z-20 px-2 py-1 bg-navy/80 text-softwhite text-xs rounded border border-ember/30 pointer-events-none">
         {Math.round(zoom * 100)}%
-      </div>
-
-      {/* Pan Instructions */}
-      <div className="absolute bottom-16 right-4 z-20 px-2 py-1 bg-navy/80 text-ash text-xs rounded border border-ember/30 pointer-events-none">
-        Use arrows to pan • 100px spacing
       </div>
 
       {/* Hearth Canvas with Pure Black Background */}
