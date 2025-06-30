@@ -322,22 +322,6 @@ export const Hearth: React.FC<HearthProps> = ({
         />
       </div>
 
-      {/* Bolt Logo - Directly Below Refresh Button */}
-      <div className="absolute top-16 left-4 z-50 pointer-events-auto">
-        <a 
-          href="https://bolt.new" 
-          target="_blank" 
-          rel="noopener noreferrer"
-          className="block hover:opacity-80 transition-opacity"
-        >
-          <img 
-            src="/logotext_poweredby_360w.png" 
-            alt="Powered by Bolt" 
-            className="h-6 w-auto"
-          />
-        </a>
-      </div>
-
       {/* Arrow Pan Controls with Fit All in Center - Bottom Left */}
       <div className="absolute bottom-6 left-4 z-50 pointer-events-auto">
         <div className="grid grid-cols-3 gap-2 w-32 h-32">

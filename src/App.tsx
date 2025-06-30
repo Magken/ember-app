@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { AuthProvider, useAuth } from './components/auth/AuthProvider';
 import { LandingPage } from './components/LandingPage';
 import { MainPage } from './components/MainPage';
+import { DeviceWarning } from './components/DeviceWarning';
 
 // Main App Content Component
 const AppContent: React.FC = () => {
@@ -77,6 +78,7 @@ const AppContent: React.FC = () => {
 function App() {
   return (
     <AuthProvider>
+      <DeviceWarning />
       <AppContent />
     </AuthProvider>
   );
