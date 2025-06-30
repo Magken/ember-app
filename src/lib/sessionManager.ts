@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { conversationCache } from './conversationCache';
 
 // Session management constants
 const SESSION_KEY = 'ember_session_data';
@@ -176,6 +177,9 @@ class SessionManager {
     // Clear cache
     this.clearCache();
     
+    // Clear conversation cache
+    conversationCache.clearAllCache();
+    
     // Notify other tabs
     this.notifyTabSync({
       type: 'session_clear',
@@ -209,6 +213,9 @@ class SessionManager {
     
     // Clear local cache
     this.clearCache();
+    
+    // Clear conversation cache
+    conversationCache.clearAllCache();
     
     // Notify other tabs
     this.notifyTabSync({
@@ -455,10 +462,14 @@ class SessionManager {
           case 'session_clear':
             this.sessionData = null;
             this.clearSessionData();
+            // Clear conversation cache on session clear
+            conversationCache.clearAllCache();
             break;
             
           case 'cache_clear':
             this.clearCache();
+            // Clear conversation cache on cache clear
+            conversationCache.clearAllCache();
             break;
         }
       } catch (error) {

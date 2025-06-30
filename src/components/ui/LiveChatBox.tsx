@@ -14,6 +14,7 @@ import {
   type Message,
   type SendMessageData 
 } from '../../lib/messaging';
+import { conversationCache } from '../../lib/conversationCache';
 
 interface MediaFile {
   id: string;
@@ -107,6 +108,9 @@ export const LiveChatBox: React.FC<LiveChatBoxProps> = ({
                 );
                 
                 if (newMessages.length > 0) {
+                  // Cache new messages
+                  newMessages.forEach(msg => conversationCache.addMessage(conversationId, msg));
+                  
                   // Mark new messages as seen if they're not from the current user
                   markMessagesAsSeen(conversationId);
                   return [...newMessages, ...prev];
@@ -123,7 +127,7 @@ export const LiveChatBox: React.FC<LiveChatBoxProps> = ({
     }, 1000); // Poll every second
   }, [conversationId]);
 
-  // Initialize conversation and load messages
+  // Initialize conversation and load messages with cache support
   useEffect(() => {
     const initializeChat = async () => {
       try {
@@ -139,18 +143,38 @@ export const LiveChatBox: React.FC<LiveChatBoxProps> = ({
 
         setConversationId(convId);
 
-        // Load initial messages
-        const { data: initialMessages, error: messagesError } = await getConversationMessages(convId, 50, 0);
+        // Check if we have cached messages for this conversation
+        const cachedMessages = conversationCache.getCachedMessages(convId);
         
-        if (messagesError) {
-          throw new Error(messagesError.message || 'Failed to load messages');
-        }
+        if (cachedMessages) {
+          console.log('Loading messages from cache...');
+          setMessages(cachedMessages.messages);
+          setHasMoreMessages(cachedMessages.hasMore);
+          setLoading(false);
+          
+          // Mark messages as seen
+          if (cachedMessages.messages.length > 0) {
+            await markMessagesAsSeen(convId);
+          }
+        } else {
+          console.log('Loading messages from server...');
+          // Load initial messages from server
+          const { data: initialMessages, error: messagesError } = await getConversationMessages(convId, 50, 0);
+          
+          if (messagesError) {
+            throw new Error(messagesError.message || 'Failed to load messages');
+          }
 
-        setMessages(initialMessages || []);
-        
-        // Mark messages as seen
-        if (initialMessages && initialMessages.length > 0) {
-          await markMessagesAsSeen(convId);
+          const messagesToSet = initialMessages || [];
+          setMessages(messagesToSet);
+          
+          // Cache the messages
+          conversationCache.cacheMessages(convId, messagesToSet, true);
+          
+          // Mark messages as seen
+          if (messagesToSet.length > 0) {
+            await markMessagesAsSeen(convId);
+          }
         }
 
         // Set up real-time subscription
@@ -158,6 +182,10 @@ export const LiveChatBox: React.FC<LiveChatBoxProps> = ({
           convId,
           (newMessage: Message) => {
             console.log('New message received in real-time:', newMessage);
+            
+            // Add to cache
+            conversationCache.addMessage(convId, newMessage);
+            
             setMessages(prev => [newMessage, ...prev]);
             
             // Mark as seen if not from current user
@@ -297,6 +325,8 @@ export const LiveChatBox: React.FC<LiveChatBoxProps> = ({
           const { data: refreshedMessages } = await getConversationMessages(conversationId, 50, 0);
           if (refreshedMessages) {
             setMessages(refreshedMessages);
+            // Update cache with refreshed messages
+            conversationCache.cacheMessages(conversationId, refreshedMessages, true);
           }
         }
       }, 500);
