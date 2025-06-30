@@ -1,14 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { BurningPaperCard } from './ui/Card';
 import { IconedButton } from './ui/IconedButton';
-import { InputBox } from './ui/InputBox';
-import { PasswordInput } from './ui/PasswordInput';
-import { EmberButton } from './ui/Button';
-import { Flame } from './ui/Flame';
-import { Hearth } from './ui/Hearth';
 import { LiveChatBox } from './ui/LiveChatBox';
-import { Heading2, Heading3, TextBlock, SmallText, TinyText } from './ui/Typography';
-import { Settings, User, UserPlus, X, Clock, CheckCircle, XCircle, Copy, LogOut, Trash2, RefreshCw, AlertCircle, MessageCircle } from 'lucide-react';
+import { Hearth } from './ui/Hearth';
+import { UserPlus } from 'lucide-react';
 import { useAuth } from './auth/AuthProvider';
 import { 
   sendFriendRequest, 
@@ -26,6 +20,8 @@ import {
 import { getUserConversations, getUnreadCountForUser, messagingSubscriptionManager } from '../lib/messaging';
 import { updateProfile, changePassword, signOut, deleteAccount } from '../lib/auth';
 import { calculateFlameStrength, calculateFlameStrengthsBatch } from '../lib/flameStrength';
+import { MainPageHeader } from './MainPageHeader';
+import { SettingsModal } from './SettingsModal';
 
 interface ValidationMessage {
   type: 'success' | 'error';
@@ -725,30 +721,10 @@ export const MainPage: React.FC = () => {
       {/* Enable scrolling for smaller screens */}
       <div className="min-h-screen overflow-auto">
         {/* Header Section - Fixed at top */}
-        <header className="fixed top-0 left-0 right-0 z-40 bg-black/80 backdrop-blur-sm">
-          <div className="flex items-center justify-between px-6 py-4">
-            {/* Left side - empty for balance */}
-            <div className="w-12"></div>
-            
-            {/* Center - User's Hearth Title and Flame */}
-            <div className="flex items-center gap-3">
-              <Flame strength={0.8} size={32} animated={true} interactive={true} />
-              <SmallText className="bg-gradient-to-r from-ember via-carmine to-ember bg-clip-text text-transparent font-medium text-lg whitespace-nowrap">
-                {userNickname}'s Hearth
-              </SmallText>
-            </div>
-            
-            {/* Right side - Settings Button */}
-            <div className="flex justify-end">
-              <IconedButton
-                icon={<Settings className="w-5 h-5" />}
-                label="Settings"
-                size="md"
-                onClick={() => setShowSettings(true)}
-              />
-            </div>
-          </div>
-        </header>
+        <MainPageHeader
+          userNickname={userNickname}
+          onSettingsClick={() => setShowSettings(true)}
+        />
 
         {/* Main Content - Hearth Display or Chat */}
         <main className="pt-20 min-h-screen">
@@ -808,400 +784,38 @@ export const MainPage: React.FC = () => {
         </main>
 
         {/* Settings Modal */}
-        {showSettings && (
-          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-            <div className="w-full max-w-md">
-              <BurningPaperCard glowOnHover className="relative max-h-[600px] flex flex-col">
-                {/* Close Button - Positioned safely within card bounds */}
-                <div className="absolute top-6 right-6 z-60">
-                  <IconedButton
-                    icon={<X className="w-4 h-4" />}
-                    label="Close Settings"
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => setShowSettings(false)}
-                  />
-                </div>
-
-                {/* Header Section - Fixed */}
-                <div className="flex-shrink-0 px-6 pt-6 pb-4">
-                  {/* Interactive Tab Navigation with Ember Effects */}
-                  <div className="flex mb-4 relative">
-                    <button
-                      onClick={() => setActiveTab('profile')}
-                      className={`flex-1 px-4 py-3 text-center font-medium transition-all duration-300 relative overflow-visible ${
-                        activeTab === 'profile'
-                          ? 'text-ember border-b-2 border-ember'
-                          : 'text-ash hover:text-softwhite'
-                      }`}
-                    >
-                      {/* Ember particles for active tab - Only show when tab is active */}
-                      {activeTab === 'profile' && Array.from({ length: 12 }).map((_, i) => (
-                        <span
-                          key={`profile-ember-${i}`}
-                          className="absolute rounded-full pointer-events-none z-10 animate-ember"
-                          style={{
-                            width: `${1 + Math.random()}px`,
-                            height: `${1 + Math.random()}px`,
-                            backgroundColor: `rgb(255,191,0)`,
-                            left: `${10 + Math.random() * 80}%`,
-                            top: `${10 + Math.random() * 80}%`,
-                            filter: 'blur(0.5px) brightness(2)',
-                            animationDelay: `${Math.random() * 2}s`,
-                            animationDuration: `${2 + Math.random() * 2}s`,
-                            boxShadow: '0 0 3px currentColor',
-                            mixBlendMode: 'screen'
-                          } as React.CSSProperties}
-                        />
-                      ))}
-                      <User className="w-4 h-4 inline mr-2" />
-                      Profile
-                    </button>
-                    <button
-                      onClick={() => setActiveTab('friends')}
-                      className={`flex-1 px-4 py-3 text-center font-medium transition-all duration-300 relative overflow-visible ${
-                        activeTab === 'friends'
-                          ? 'text-ember border-b-2 border-ember'
-                          : 'text-ash hover:text-softwhite'
-                      }`}
-                    >
-                      {/* Ember particles for active tab - Only show when tab is active */}
-                      {activeTab === 'friends' && Array.from({ length: 12 }).map((_, i) => (
-                        <span
-                          key={`friends-ember-${i}`}
-                          className="absolute rounded-full pointer-events-none z-10 animate-ember"
-                          style={{
-                            width: `${1 + Math.random()}px`,
-                            height: `${1 + Math.random()}px`,
-                            backgroundColor: `rgb(255,191,0)`,
-                            left: `${10 + Math.random() * 80}%`,
-                            top: `${10 + Math.random() * 80}%`,
-                            filter: 'blur(0.5px) brightness(2)',
-                            animationDelay: `${Math.random() * 2}s`,
-                            animationDuration: `${2 + Math.random() * 2}s`,
-                            boxShadow: '0 0 3px currentColor',
-                            mixBlendMode: 'screen'
-                          } as React.CSSProperties}
-                        />
-                      ))}
-                      <UserPlus className="w-4 h-4 inline mr-2" />
-                      Friends
-                    </button>
-                  </div>
-                </div>
-
-                {/* Scrollable Content Area */}
-                <div 
-                  className="flex-1 overflow-y-auto px-6 scrollbar-hide"
-                  style={{ 
-                    maxHeight: '400px',
-                    minHeight: '200px'
-                  }}
-                >
-                  {activeTab === 'profile' && (
-                    <div className="space-y-6 pb-4">
-                      {/* Profile Validation Message */}
-                      {profileMessage && (
-                        <div className={`p-3 rounded-soft border flex items-start gap-3 ${
-                          profileMessage.type === 'success' 
-                            ? 'bg-ember/20 border-ember/50' 
-                            : 'bg-carmine/20 border-carmine/50'
-                        }`}>
-                          {profileMessage.type === 'success' ? (
-                            <CheckCircle className="w-5 h-5 text-ember flex-shrink-0 mt-0.5" />
-                          ) : (
-                            <AlertCircle className="w-5 h-5 text-carmine flex-shrink-0 mt-0.5" />
-                          )}
-                          <SmallText className={profileMessage.type === 'success' ? 'text-ember' : 'text-carmine'}>
-                            {profileMessage.message}
-                          </SmallText>
-                        </div>
-                      )}
-
-                      <div>
-                        <Heading3 className="mb-4">Profile Settings</Heading3>
-                        
-                        {/* Nickname Section */}
-                        <div className="space-y-4">
-                          <div>
-                            <label className="block text-sm font-medium text-softwhite mb-2">
-                              Nickname
-                            </label>
-                            <InputBox
-                              value={nickname}
-                              onChange={setNickname}
-                              placeholder="Your display name"
-                            />
-                          </div>
-                          
-                          <div className="pt-2">
-                            <EmberButton size="sm" onClick={handleSaveProfile}>
-                              Save Profile
-                            </EmberButton>
-                          </div>
-                        </div>
-
-                        {/* Unique Code Section */}
-                        <div className="my-8 pt-6 border-t border-ember/30">
-                          <Heading3 className="text-lg mb-4">Your Unique Code</Heading3>
-                          <TextBlock className="text-sm text-ash mb-4">
-                            Share this code with friends so they can add you to their hearth.
-                          </TextBlock>
-                          
-                          <div className="flex items-center gap-3 p-3 bg-navy/40 rounded border border-ember/30">
-                            <code className="flex-1 text-ember font-mono text-sm bg-dark/50 px-3 py-2 rounded">
-                              {profile?.unique_code || 'Loading...'}
-                            </code>
-                            <IconedButton
-                              icon={<Copy className="w-4 h-4" />}
-                              label="Copy Code"
-                              size="sm"
-                              variant="ghost"
-                              onClick={copyUniqueCode}
-                            />
-                          </div>
-                        </div>
-
-                        {/* Password Change Section */}
-                        <div className="space-y-4 pt-6 border-t border-ember/30">
-                          <Heading3 className="text-lg">Change Password</Heading3>
-                          
-                          <div>
-                            <label className="block text-sm font-medium text-softwhite mb-2">
-                              Current Password
-                            </label>
-                            <PasswordInput
-                              value={currentPassword}
-                              onChange={setCurrentPassword}
-                              placeholder="Enter current password"
-                            />
-                          </div>
-
-                          <div>
-                            <label className="block text-sm font-medium text-softwhite mb-2">
-                              New Password
-                            </label>
-                            <PasswordInput
-                              value={newPassword}
-                              onChange={setNewPassword}
-                              placeholder="Enter new password"
-                            />
-                          </div>
-
-                          <div>
-                            <label className="block text-sm font-medium text-softwhite mb-2">
-                              Confirm New Password
-                            </label>
-                            <PasswordInput
-                              value={confirmPassword}
-                              onChange={setConfirmPassword}
-                              placeholder="Confirm new password"
-                            />
-                          </div>
-
-                          <div className="pt-2">
-                            <EmberButton size="sm" onClick={handlePasswordChange}>
-                              Change Password
-                            </EmberButton>
-                          </div>
-                        </div>
-
-                        {/* Account Actions Section */}
-                        <div className="space-y-4 pt-6 border-t border-ember/30">
-                          <Heading3 className="text-lg">Account Actions</Heading3>
-                          
-                          <div className="space-y-3">
-                            <button
-                              onClick={handleLogout}
-                              className="w-full px-4 py-2 text-sm bg-navy/40 text-softwhite border border-ember/30 rounded-soft hover:bg-navy/60 hover:border-ember/50 transition-all duration-300 flex items-center justify-center gap-2"
-                            >
-                              Log Out
-                            </button>
-                            
-                            <button
-                              onClick={handleDeleteAccount}
-                              className="w-full px-4 py-2 text-sm bg-carmine/20 text-carmine border border-carmine/50 rounded-soft hover:bg-carmine/30 transition-all duration-300 flex items-center justify-center gap-2"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                              Delete Account
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {activeTab === 'friends' && (
-                    <div className="space-y-6 pb-4">
-                      {/* Friends Validation Message */}
-                      {friendsMessage && (
-                        <div className={`p-3 rounded-soft border flex items-start gap-3 ${
-                          friendsMessage.type === 'success' 
-                            ? 'bg-ember/20 border-ember/50' 
-                            : 'bg-carmine/20 border-carmine/50'
-                        }`}>
-                          {friendsMessage.type === 'success' ? (
-                            <CheckCircle className="w-5 h-5 text-ember flex-shrink-0 mt-0.5" />
-                          ) : (
-                            <AlertCircle className="w-5 h-5 text-carmine flex-shrink-0 mt-0.5" />
-                          )}
-                          <SmallText className={friendsMessage.type === 'success' ? 'text-ember' : 'text-carmine'}>
-                            {friendsMessage.message}
-                          </SmallText>
-                        </div>
-                      )}
-
-                      <div>
-                        <div className="flex items-center justify-between mb-4">
-                          <Heading3>Add Friend</Heading3>
-                          <IconedButton
-                            icon={<RefreshCw className="w-4 h-4" />}
-                            label="Refresh"
-                            size="sm"
-                            variant="ghost"
-                            onClick={handleRefresh}
-                          />
-                        </div>
-                        <TextBlock className="text-sm text-ash mb-6">
-                          Enter a username or unique code to send a friend request. Once accepted, their ember will appear in your hearth.
-                        </TextBlock>
-                        
-                        <div className="space-y-4">
-                          <div>
-                            <label className="block text-sm font-medium text-softwhite mb-2">
-                              Username or Unique Code
-                            </label>
-                            <InputBox
-                              value={friendUsername}
-                              onChange={setFriendUsername}
-                              placeholder="Enter username or EMBR-XXXXXXXX"
-                            />
-                          </div>
-                          
-                          <div className="pt-2">
-                            <EmberButton 
-                              size="sm" 
-                              onClick={handleAddFriend}
-                              disabled={loading}
-                            >
-                              {loading ? 'Sending...' : 'Send Friend Request'}
-                            </EmberButton>
-                          </div>
-                        </div>
-
-                        {/* Error Display */}
-                        {error && (
-                          <div className="mt-4 p-3 bg-carmine/20 border border-carmine/50 rounded">
-                            <SmallText className="text-carmine">{error}</SmallText>
-                          </div>
-                        )}
-
-                        {/* Incoming Friend Requests Section */}
-                        <div className="mt-8 pt-6 border-t border-ember/30">
-                          <Heading3 className="text-lg mb-4 flex items-center gap-2">
-                            <UserPlus className="w-5 h-5 text-ember" />
-                            Incoming Requests
-                            {incomingRequests.length > 0 && (
-                              <span className="bg-ember text-dark text-xs px-2 py-1 rounded-full font-bold">
-                                {incomingRequests.length}
-                              </span>
-                            )}
-                          </Heading3>
-                          
-                          <div className="space-y-3">
-                            {incomingRequests.length > 0 ? (
-                              incomingRequests.map((request) => (
-                                <div key={request.request_id} className="flex items-center justify-between p-3 bg-navy/40 rounded border border-ember/30 transition-all duration-300 hover:border-ember/50">
-                                  <div>
-                                    <SmallText className="font-medium text-softwhite">{request.sender_nickname}</SmallText>
-                                    <TinyText className="text-ash block">{formatTimeAgo(request.created_at)}</TinyText>
-                                  </div>
-                                  <div className="flex gap-2">
-                                    {request.status === 'pending' ? (
-                                      <>
-                                        <IconedButton
-                                          icon={<CheckCircle className="w-4 h-4" />}
-                                          label="Accept"
-                                          size="sm"
-                                          variant="ghost"
-                                          onClick={() => handleAcceptRequest(request.request_id)}
-                                          className="text-ember hover:bg-ember/20"
-                                        />
-                                        <IconedButton
-                                          icon={<XCircle className="w-4 h-4" />}
-                                          label="Decline"
-                                          size="sm"
-                                          variant="ghost"
-                                          onClick={() => handleDeclineRequest(request.request_id)}
-                                          className="text-carmine hover:bg-carmine/20"
-                                        />
-                                      </>
-                                    ) : request.status === 'accepted' ? (
-                                      <span className="px-3 py-1 text-xs bg-ember/20 text-ember rounded">Accepted</span>
-                                    ) : (
-                                      <span className="px-3 py-1 text-xs bg-carmine/20 text-carmine rounded">Declined</span>
-                                    )}
-                                  </div>
-                                </div>
-                              ))
-                            ) : (
-                              <div className="text-center py-6">
-                                <UserPlus className="w-8 h-8 text-ash mx-auto mb-2 opacity-50" />
-                                <SmallText className="text-ash">No incoming friend requests</SmallText>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Outgoing Friend Requests Section */}
-                        <div className="pt-6 border-t border-ember/30">
-                          <Heading3 className="text-lg mb-4 flex items-center gap-2">
-                            <Clock className="w-5 h-5 text-ember" />
-                            Sent Requests
-                            {outgoingRequests.length > 0 && (
-                              <span className="bg-ash text-dark text-xs px-2 py-1 rounded-full font-bold">
-                                {outgoingRequests.length}
-                              </span>
-                            )}
-                          </Heading3>
-                          
-                          <div className="space-y-3">
-                            {outgoingRequests.length > 0 ? (
-                              outgoingRequests.map((request) => (
-                                <div key={request.request_id} className="flex items-center justify-between p-3 bg-deepblue/40 rounded border border-ember/20 transition-all duration-300 hover:border-ember/40">
-                                  <div>
-                                    <SmallText className="font-medium text-softwhite">{request.receiver_nickname}</SmallText>
-                                    <TinyText className="text-ash block">{formatTimeAgo(request.created_at)}</TinyText>
-                                  </div>
-                                  <div className="flex items-center gap-2">
-                                    <Clock className="w-4 h-4 text-ash" />
-                                    <span className="px-3 py-1 text-xs bg-ash/20 text-ash rounded">Pending</span>
-                                  </div>
-                                </div>
-                              ))
-                            ) : (
-                              <div className="text-center py-6">
-                                <Clock className="w-8 h-8 text-ash mx-auto mb-2 opacity-50" />
-                                <SmallText className="text-ash">No pending sent requests</SmallText>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* Footer - Fixed at bottom */}
-                <div className="flex-shrink-0 px-6 pb-6 pt-4 border-t border-ember/30">
-                  <SmallText className="text-center text-ash">
-                    Your connections are private and secure.
-                  </SmallText>
-                </div>
-              </BurningPaperCard>
-            </div>
-          </div>
-        )}
+        <SettingsModal
+          showSettings={showSettings}
+          activeTab={activeTab}
+          onClose={() => setShowSettings(false)}
+          onTabChange={setActiveTab}
+          nickname={nickname}
+          onNicknameChange={setNickname}
+          currentPassword={currentPassword}
+          onCurrentPasswordChange={setCurrentPassword}
+          newPassword={newPassword}
+          onNewPasswordChange={setNewPassword}
+          confirmPassword={confirmPassword}
+          onConfirmPasswordChange={setConfirmPassword}
+          profileMessage={profileMessage}
+          uniqueCode={profile?.unique_code || ''}
+          onSaveProfile={handleSaveProfile}
+          onChangePassword={handlePasswordChange}
+          onCopyUniqueCode={copyUniqueCode}
+          onLogout={handleLogout}
+          onDeleteAccount={handleDeleteAccount}
+          friendUsername={friendUsername}
+          onFriendUsernameChange={setFriendUsername}
+          friendsMessage={friendsMessage}
+          error={error}
+          loading={loading}
+          incomingRequests={incomingRequests}
+          outgoingRequests={outgoingRequests}
+          onAddFriend={handleAddFriend}
+          onRefresh={handleRefresh}
+          onAcceptRequest={handleAcceptRequest}
+          onDeclineRequest={handleDeclineRequest}
+        />
       </div>
     </div>
   );
